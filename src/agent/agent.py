@@ -2,7 +2,8 @@ import logging
 from typing import Any, Type
 from pydantic import BaseModel
 
-from .llm import Client, Request, Response
+from .llm import Request, Response
+from .llm_client import Client
 from .types import Event, Message, ToolCall, ToolResult
 from .tool_base import BaseTool, FuncTool
 from .helpers import format_tool_def
