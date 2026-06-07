@@ -1,14 +1,12 @@
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
 from app_tools import APP_TOOLS
-
-if TYPE_CHECKING:
-    from agent.agent import Agent
-    from agent.llm import Client
+from agent.agent import Agent
+from agent.llm import Client
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -56,18 +54,38 @@ def config_help(path: Path) -> str:
     )
 
 
-def get_map(data: dict[str, Any], key: str) -> dict[str, Any]:
-    value = data.get(key) or {}
+def require_section(data: dict[str, Any], key: str) -> dict[str, Any]:
+    value = data.get(key)
     if isinstance(value, dict):
         return value
     raise ValueError(f"Config section must be an object: {key}")
 
 
-def require_text(data: dict[str, Any], key: str, label: str) -> str:
+def require_text(data: dict[str, Any], key: str, label: str | None = None) -> str:
     value = data.get(key)
-    if isinstance(value, str) and value.strip():
-        return value.strip()
-    raise ValueError(f"Missing required config value: {label}")
+    name = label or key
+
+    if isinstance(value, str) and (text := value.strip()):
+        return text
+
+    raise ValueError(f"Missing required config value: {name}")
+
+
+def get_client(config: dict[str, Any]) -> "Client":
+
+    llm = require_section(config, "llm")
+    model = require_text(llm, "model", "llm.model")
+    base_url = require_text(llm, "base_url", "llm.base_url")
+
+    options: dict[str, Any] = {
+        "base_url": base_url,
+        "api_key": require_api_key(),
+    }
+
+    if "temperature" in llm:
+        options["temperature"] = llm["temperature"]
+
+    return Client(model=model, **options)
 
 
 def require_api_key() -> str:
@@ -77,53 +95,17 @@ def require_api_key() -> str:
     raise ValueError(f"Set {API_KEY_NAME} in .env or your shell environment.")
 
 
-def resolve_llm_settings(config: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-    llm = get_map(config, "llm")
-    model = require_text(llm, "model", "llm.model")
-    base_url = require_text(llm, "base_url", "llm.base_url")
-    options: dict[str, Any] = {
-        "base_url": base_url,
-        "api_key": require_api_key(),
-    }
+def get_agent(config: dict[str, Any], client: "Client", max_steps: int | None) -> "Agent":
 
-    if "temperature" in llm:
-        options["temperature"] = llm["temperature"]
-
-    return model, options
-
-
-def resolve_agent_settings(
-    config: dict[str, Any], max_steps: int | None
-) -> dict[str, Any]:
-    agent = get_map(config, "agent")
+    agent = require_section(config, "agent")
+    name = str(agent.get("name", "sample-agent"))
+    insts = str(agent.get("instructions", ""))
     steps = max_steps if max_steps is not None else int(agent.get("max_steps", 5))
 
-    return {
-        "name": str(agent.get("name", "sample-agent")),
-        "instructions": str(agent.get("instructions", "")),
-        "max_steps": steps,
-    }
-
-
-def get_client(config: dict[str, Any]) -> "Client":
-    model, options = resolve_llm_settings(config)
-
-    from agent.llm import Client
-
-    return Client(model=model, **options)
-
-
-def get_agent(
-    config: dict[str, Any], client: "Client", max_steps: int | None
-) -> "Agent":
-    settings = resolve_agent_settings(config, max_steps)
-
-    from agent.agent import Agent
-
     return Agent(
-        model=client,
+        client=client,
         tools=APP_TOOLS,
-        insts=settings["instructions"],
-        max_steps=settings["max_steps"],
-        name=settings["name"],
+        insts=insts,
+        max_steps=steps,
+        name=name,
     )

@@ -14,7 +14,7 @@ class Agent:
 
     def __init__(
         self,
-        model: Client,
+        client: Client,
         tools: list[BaseTool] | None = None,
         insts: str = "",
         max_steps: int = 10,
@@ -22,7 +22,7 @@ class Agent:
         desc: str = "",
         output_type: Type[BaseModel] | None = None
     ):
-        self.model = model
+        self.client = client
         self.insts = insts
         self.max_step = max_steps
         self.name = name
@@ -89,7 +89,7 @@ class Agent:
 
 
     async def think(self, request: Request) -> Response:
-        return await self.model.generate(request)
+        return await self.client.generate(request)
     
     async def act(self, ctx: ExecContext, tool_calls: list[ToolCall]) -> None:
         

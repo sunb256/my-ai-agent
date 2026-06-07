@@ -39,6 +39,7 @@ async def run_once(agent: Agent, prompt: str, verbose: bool) -> None:
 
 async def run_repl(agent: Agent, verbose: bool) -> None:
     print("Enter a prompt. Press Ctrl-D or submit an empty line to exit.")
+
     while True:
         try:
             prompt = input("> ").strip()
