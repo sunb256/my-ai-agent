@@ -90,7 +90,7 @@ class Agent:
 
 
     async def think(self, request: Request) -> Response:
-        return await self.client.generate(request)
+        return await self.client.call_llm(request)
     
     async def act(self, ctx: ExecContext, tool_calls: list[ToolCall]) -> None:
         

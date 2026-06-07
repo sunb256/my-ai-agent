@@ -48,10 +48,11 @@ class Client:
         self.model = model
         self.config = config
 
-    async def generate(self, request: Request) -> Response:
+    async def call_llm(self, request: Request) -> Response:
         try:
             msgs = self._build_msgs(request)
             tools = [tool.tool_def for tool in request.tools]
+            # print(f"tools: {tools}")
 
             response = await acompletion(
                 model=self.model,
@@ -148,7 +149,7 @@ class Client:
             insts=[inst],
             contents=[Message(role="user", content="Please respond.")],
         )
-        res = await self.generate(req)
+        res = await self.call_llm(req)
         if res.err_msg:
             raise RuntimeError(res.err_msg)
 
