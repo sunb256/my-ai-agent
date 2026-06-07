@@ -1,29 +1,16 @@
 import argparse
 import asyncio
 import sys
-from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from app_tools import APP_TOOLS
 from init import DEFAULT_CONFIG, load_config, load_env, resolve_agent_settings
 from init import resolve_llm_settings
-from agent.tool_base import tool
 
 if TYPE_CHECKING:
     from agent.agent import Agent
     from agent.llm import Client
-
-
-@tool
-def get_current_time() -> str:
-    """Return the current local datetime."""
-    return datetime.now().isoformat(timespec="seconds")
-
-
-@tool
-def add_numbers(a: int, b: int) -> int:
-    """Add two integers and return the result."""
-    return a + b
 
 
 def parse_args() -> argparse.Namespace:
@@ -59,7 +46,7 @@ def build_agent(config: dict[str, Any], client: Client, max_steps: int | None) -
 
     return Agent(
         model=client,
-        tools=[get_current_time, add_numbers],
+        tools=APP_TOOLS,
         insts=settings["instructions"],
         max_steps=settings["max_steps"],
         name=settings["name"],
@@ -91,12 +78,14 @@ async def run_repl(agent: Agent, verbose: bool) -> None:
 
 async def async_main() -> int:
     args = parse_args()
+    
     try:
         load_env()
         config = load_config(Path(args.config))
         client = build_client(config)
         agent = build_agent(config, client, args.max_steps)
         prompt = " ".join(args.prompt).strip()
+
         if prompt:
             await run_once(agent, prompt, args.verbose)
         else:
