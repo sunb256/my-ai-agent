@@ -48,7 +48,7 @@ def test_generate_builds_litellm_messages(monkeypatch: pytest.MonkeyPatch) -> No
         ],
     )
 
-    response = asyncio.run(client.generate(request))
+    response = asyncio.run(client.call_llm(request))
 
     assert response.err_msg is None
     assert captured["messages"] == [
