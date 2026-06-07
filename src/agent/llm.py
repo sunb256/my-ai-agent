@@ -126,28 +126,32 @@ class Client:
 
         for item in request.contents:
             if isinstance(item, Message):
-                msgs.append({"role": item.role, "content": item.content})
+                msgs.append(self._message(item))
             elif isinstance(item, ToolCall):
-                self._append_call(msgs, item)
+                msgs.append(self._tool_call(item))
             elif isinstance(item, ToolResult):
                 msgs.append(self._tool_result(item))
 
         return msgs
 
-    def _append_call(self, msgs: list[dict[str, Any]], item: ToolCall) -> None:
-        tool_call = {
-            "id": item.tool_call_id,
-            "type": "function",
-            "function": {
-                "name": item.name,
-                "arguments": json.dumps(item.args),
-            },
-        }
-        if msgs and msgs[-1]["role"] == "assistant":
-            msgs[-1].setdefault("tool_calls", []).append(tool_call)
-            return
+    def _message(self, item: Message) -> dict[str, Any]:
+        return {"role": item.role, "content": item.content}
 
-        msgs.append({"role": "assistant", "content": None, "tool_calls": [tool_call]})
+    def _tool_call(self, item: ToolCall) -> dict[str, Any]:
+        return {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": item.tool_call_id,
+                    "type": "function",
+                    "function": {
+                        "name": item.name,
+                        "arguments": json.dumps(item.args),
+                    },
+                }
+            ],
+        }
 
     def _tool_result(self, item: ToolResult) -> dict[str, Any]:
         return {
