@@ -24,8 +24,8 @@ class Response(BaseModel):
     err_msg: str | None = None
     usage_metadata: dict[str, Any] = Field(default_factory=dict)
 
-def build_msgs(request: Request) -> list[dict]:
-    msgs = []
+def build_msgs(request: Request) -> list[dict[str, Any]]:
+    msgs: list[dict[str, Any]] = []
 
     for inst in request.insts:
         msgs.append({
@@ -40,7 +40,7 @@ def build_msgs(request: Request) -> list[dict]:
                 "content": item.content
             })
         elif isinstance(item, ToolCall):
-            tool_call_dict = {
+            tool_call_dict: dict[str, Any] = {
                 "id": item.tool_call_id,
                 "type": "function",
                 "function": {
@@ -49,7 +49,6 @@ def build_msgs(request: Request) -> list[dict]:
                 }
             }
             if msgs and msgs[-1]["role"] == "assistant":
-                # 最後の要素のdictに、tool_calls リストがなければ追加し、tool_call_dict を追加
                 msgs[-1].setdefault("tool_calls", []).append(tool_call_dict)
             else:
                 msgs.append({
@@ -97,7 +96,10 @@ class Client:
         
         if response_format is not None:
             schema_text = json.dumps(response_format.model_json_schema())
-            inst = (f"{prompt}\n\nRespond ONLY with valid JSON matching this schema:\n{schema_text}")
+            inst = (
+                f"{prompt}\n\n"
+                f"Respond ONLY with valid JSON matching this schema:\n{schema_text}"
+            )
         else:
             inst = prompt
         
@@ -130,28 +132,28 @@ class Client:
         # convert pydantic model
         return response_format.model_validate_json(cleaned.strip())
 
-    def _build_msgs(self, request: Request) -> list[dict]:
+    def _build_msgs(self, request: Request) -> list[dict[str, Any]]:
         return build_msgs(request)
     
     def _parse_response(self, response) -> Response:
         choice = response.choices[0]
-        contents = []
+        contents: list[ContentItem] = []
 
         if choice.message.content:
-            content = Message(
+            message = Message(
                 role="assistant",
                 content=choice.message.content
             )
-            contents.append(content)
+            contents.append(message)
         
         if choice.message.tool_calls:
             for tc in choice.message.tool_calls:
-                content = ToolCall(
+                tool_call = ToolCall(
                     tool_call_id=tc.id,
                     name=tc.function.name,
                     args=json.loads(tc.function.arguments or "{}")
                 )
-                contents.append(content)
+                contents.append(tool_call)
         
         return Response(
             content=contents,

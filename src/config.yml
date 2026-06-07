@@ -1,0 +1,11 @@
+llm:
+  model: "openai/your-model-name"
+  base_url: "https://your-openai-compatible-endpoint/v1"
+  temperature: 0.2
+
+agent:
+  name: "sample-agent"
+  instructions: |
+    あなたは簡潔に回答するAIアシスタントです。
+    必要なら利用可能なツールを使ってください。
+  max_steps: 5

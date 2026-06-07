@@ -1,7 +1,6 @@
 import inspect
 from abc import ABC, abstractmethod
 from typing import Any, Callable
-from pydantic import BaseModel
 
 from .helpers import func_input_schema, format_tool_def
 from .context import ExecContext
@@ -9,9 +8,9 @@ from .context import ExecContext
 class BaseTool(ABC):
 
     def __init__(self,
-                 name: str = None,
-                 desc: str = None,
-                 tool_def: dict[str, Any] = None):
+                 name: str | None = None,
+                 desc: str | None = None,
+                 tool_def: dict[str, Any] | None = None):
     
         self.name = name or self.__class__.__name__
         self.desc = desc or self.__doc__ or ""
@@ -33,9 +32,9 @@ class FuncTool(BaseTool):
 
     def __init__(self,
                  func: Callable,
-                 name: str = None,
-                 desc: str = None,
-                 tool_def: dict[str, Any] = None):
+                 name: str | None = None,
+                 desc: str | None = None,
+                 tool_def: dict[str, Any] | None = None):
     
         self.func = func
         self.needs_ctx = "ctx" in inspect.signature(func).parameters
@@ -80,5 +79,3 @@ def tool(func=None, *, name=None, desc=None):
         return decorator
     else:
         return decorator(func)
-
-
