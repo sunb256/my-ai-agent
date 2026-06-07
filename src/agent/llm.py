@@ -46,54 +46,13 @@ class Request(BaseModel):
 
     def append_insts(self, text: str) -> None:
         self.insts.append(text)
-    
+
+
 class Response(BaseModel):
     content: list[ContentItem] = Field(default_factory=list)
     err_msg: str | None = None
-    usage_metadata: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
-def build_msgs(request: Request) -> list[dict[str, Any]]:
-    """Build message history for LLM requests."""
-
-    msgs: list[dict[str, Any]] = []
-
-    for inst in request.insts:
-        msgs.append({
-            "role": "system", 
-            "content": inst
-        })
-    
-    for item in request.contents:
-        if isinstance(item, Message):
-            msgs.append({
-                "role": item.role, 
-                "content": item.content
-            })
-        elif isinstance(item, ToolCall):
-            tool_call_dict: dict[str, Any] = {
-                "id": item.tool_call_id,
-                "type": "function",
-                "function": {
-                    "name": item.name,
-                    "arguments": json.dumps(item.args)
-                }
-            }
-            if msgs and msgs[-1]["role"] == "assistant":
-                msgs[-1].setdefault("tool_calls", []).append(tool_call_dict)
-            else:
-                msgs.append({
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": [tool_call_dict] 
-                })
-        elif isinstance(item, ToolResult):
-            msgs.append({
-                "role": "tool",
-                "content": str(item.content[0]) if item.content else "",
-                "tool_call_id": item.tool_call_id,
-            })
-    
-    return msgs
 
 class Client:
 
@@ -103,7 +62,7 @@ class Client:
     
     async def generate(self, request: Request) -> Response:
         try:
-            msgs = build_msgs(request)
+            msgs = self._build_msgs(request)
             tools = [t.tool_def for t in request.tools]
 
             res = await acompletion(
@@ -163,7 +122,39 @@ class Client:
         return response_format.model_validate_json(cleaned.strip())
 
     def _build_msgs(self, request: Request) -> list[dict[str, Any]]:
-        return build_msgs(request)
+        msgs = [{"role": "system", "content": inst} for inst in request.insts]
+
+        for item in request.contents:
+            if isinstance(item, Message):
+                msgs.append({"role": item.role, "content": item.content})
+            elif isinstance(item, ToolCall):
+                self._append_call(msgs, item)
+            elif isinstance(item, ToolResult):
+                msgs.append(self._tool_result(item))
+
+        return msgs
+
+    def _append_call(self, msgs: list[dict[str, Any]], item: ToolCall) -> None:
+        tool_call = {
+            "id": item.tool_call_id,
+            "type": "function",
+            "function": {
+                "name": item.name,
+                "arguments": json.dumps(item.args),
+            },
+        }
+        if msgs and msgs[-1]["role"] == "assistant":
+            msgs[-1].setdefault("tool_calls", []).append(tool_call)
+            return
+
+        msgs.append({"role": "assistant", "content": None, "tool_calls": [tool_call]})
+
+    def _tool_result(self, item: ToolResult) -> dict[str, Any]:
+        return {
+            "role": "tool",
+            "content": str(item.content[0]) if item.content else "",
+            "tool_call_id": item.tool_call_id,
+        }
     
     def _parse_response(self, response) -> Response:
         choice = response.choices[0]
@@ -187,7 +178,7 @@ class Client:
         
         return Response(
             content=contents,
-            usage_metadata={
+            metadata={
                 "input_tokens": response.usage.prompt_tokens,
                 "output_tokens": response.usage.completion_tokens
             }
