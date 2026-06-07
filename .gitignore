@@ -23,3 +23,6 @@ adk-python/
 .env
 .venv/
 .codex/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/

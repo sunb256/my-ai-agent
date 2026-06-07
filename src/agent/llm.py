@@ -53,6 +53,8 @@ class Response(BaseModel):
     usage_metadata: dict[str, Any] = Field(default_factory=dict)
 
 def build_msgs(request: Request) -> list[dict[str, Any]]:
+    """Build message history for LLM requests."""
+
     msgs: list[dict[str, Any]] = []
 
     for inst in request.insts:
