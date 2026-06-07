@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from .llm import Client, Request, Response
 from .types import Event, Message, ToolCall, ToolResult
-from .tool_base import BaseTool, FuncTool, tool
+from .tool_base import BaseTool, FuncTool
 from .helpers import format_tool_def
 from .context import AgentResult, ExecContext
 
@@ -20,7 +20,7 @@ class Agent:
         max_steps: int = 10,
         name: str = "agent",
         desc: str = "",
-        output_type: Type[BaseModel] = None
+        output_type: Type[BaseModel] | None = None
     ):
         self.model = model
         self.insts = insts
@@ -36,7 +36,12 @@ class Agent:
     # - Core loop
     # ---------------
 
-    async def run(self, user_input, ctx: ExecContext | None = None, verbose: bool = False) -> AgentResult:
+    async def run(
+        self,
+        user_input,
+        ctx: ExecContext | None = None,
+        verbose: bool = False,
+    ) -> AgentResult:
 
         if ctx is None:
             ctx = ExecContext()
@@ -88,8 +93,8 @@ class Agent:
     
     async def act(self, ctx: ExecContext, tool_calls: list[ToolCall]) -> None:
         
-        tools_dict = {tool.name: tool for tool in self.tools}
-        results = []
+        tools_dict = {item.name: item for item in self.tools}
+        results: list[Message | ToolCall | ToolResult] = []
 
         for tool_call in tool_calls:
             if tool_call.name not in tools_dict:
@@ -213,7 +218,7 @@ class Agent:
 
             captured_type = self.output_type
             
-            def _parse_output(output) -> str:
+            def _parse_output(output) -> Any:
                 if isinstance(output, dict):
                     return captured_type.model_validate(output)
                 return output
