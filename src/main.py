@@ -34,9 +34,7 @@ async def run_once(agent: Agent, prompt: str, verbose: bool) -> None:
         print(result.output)
         return
 
-    raise RuntimeError(
-        "Agent finished without output. Check max_steps or model response."
-    )
+    raise RuntimeError("Agent finished without output. Check max_steps or model response.")
 
 
 async def run_repl(agent: Agent, verbose: bool) -> None:
