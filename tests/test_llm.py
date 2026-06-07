@@ -9,7 +9,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from agent.llm import Client, Request  # noqa: E402
+from agent.llm import Request  # noqa: E402
+from agent.llm_client import Client  # noqa: E402
 from agent.types import Message, ToolCall, ToolResult  # noqa: E402
 
 
@@ -27,7 +28,7 @@ def test_generate_builds_litellm_messages(monkeypatch: pytest.MonkeyPatch) -> No
             usage=SimpleNamespace(prompt_tokens=3, completion_tokens=2),
         )
 
-    monkeypatch.setattr("agent.llm.acompletion", fake_completion)
+    monkeypatch.setattr("agent.llm_client.acompletion", fake_completion)
     client = Client(model="openai/test", api_key="secret")
     request = Request(
         insts=["Be concise."],

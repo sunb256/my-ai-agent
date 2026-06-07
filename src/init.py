@@ -6,7 +6,7 @@ import yaml  # type: ignore[import-untyped]
 
 from app_tools import APP_TOOLS
 from agent.agent import Agent
-from agent.llm import Client
+from agent.llm_client import Client
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
