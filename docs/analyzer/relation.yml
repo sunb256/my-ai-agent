@@ -1,0 +1,31 @@
+summary: |
+  このプロジェクトは、**LiteLLMを使ってLLMと会話し、必要に応じてPython関数ツールを実行するAIエージェントの最小実装**です。
+  中心は `Agent` の実行ループで、会話履歴を `ExecContext` に積みながら、LLM応答、ツール呼び出し、最終結果の抽出を進めます。
+  ツール定義や構造化出力は、型ヒントとPydanticモデルを使ってLLMが扱える schema に変換されます。
+
+relationships:
+  - from_abstraction: 0 # 実行ループ
+    to_abstruction: 1 # 会話履歴
+    label: "読み書きする"
+  - from_abstraction: 0 # 実行ループ
+    to_abstruction: 2 # LLM接続
+    label: "問い合わせる"
+  - from_abstraction: 2 # LLM接続
+    to_abstruction: 1 # 会話履歴
+    label: "変換する"
+  - from_abstraction: 0 # 実行ループ
+    to_abstruction: 3 # ツール基盤
+    label: "実行する"
+  - from_abstraction: 3 # ツール基盤
+    to_abstruction: 4 # スキーマ生成
+    label: "利用する"
+  - from_abstraction: 4 # スキーマ生成
+    to_abstruction: 2 # LLM接続
+    label: "定義を渡す"
+  - from_abstraction: 5 # 構造化出力
+    to_abstruction: 3 # ツール基盤
+    label: "追加する"
+  - from_abstraction: 0 # 実行ループ
+    to_abstruction: 5 # 構造化出力
+    label: "抽出する"
+

@@ -1,0 +1,37 @@
+- name: 実行ループ
+  description: ユーザー入力を受け取り、LLMへの問い合わせ、ツール実行、最終結果の判定を繰り返すエージェントの中心処理です。
+  file_indices:
+    - 0 # src/agent/agent.py
+
+- name: 会話履歴
+  description: メッセージ、ツール呼び出し、ツール結果をイベントとして保存し、実行中の状態とステップ数を管理する仕組みです。
+  file_indices:
+    - 1 # src/agent/context.py
+    - 6 # src/agent/types.py
+
+- name: LLM接続
+  description: 内部のイベントやツール情報をLiteLLMのチャット形式へ変換し、モデルの返答を内部データへ戻す窓口です。
+  file_indices:
+    - 3 # src/agent/llm.py
+    - 6 # src/agent/types.py
+
+- name: ツール基盤
+  description: Python関数をエージェントから呼べるツールとして包み、同期・非同期の関数を共通の呼び出し方で実行できるようにします。
+  file_indices:
+    - 5 # src/agent/tool_base.py
+    - 2 # src/agent/helpers.py
+    - 0 # src/agent/agent.py
+
+- name: スキーマ生成
+  description: 関数の型ヒントからLLMに渡すJSON Schemaを作り、ツール定義をOpenAI互換の形式へ整える補助処理です。
+  file_indices:
+    - 2 # src/agent/helpers.py
+    - 5 # src/agent/tool_base.py
+
+- name: 構造化出力
+  description: Pydanticモデルを最終回答用のツールとして登録し、LLMの回答を型付きの結果として受け取るための仕組みです。
+  file_indices:
+    - 0 # src/agent/agent.py
+    - 2 # src/agent/helpers.py
+    - 5 # src/agent/tool_base.py
+

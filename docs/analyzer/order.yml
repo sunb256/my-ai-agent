@@ -1,0 +1,38 @@
+summary: |
+  初めて読む場合は、まずデータの入れ物である**会話履歴**を把握し、次にLLMとの入出力形式、ツール定義、構造化出力の順に読むと理解しやすいです。
+  最後に**実行ループ**を見ると、それぞれの部品がどの順番で使われるかがつながります。
+
+ordered_abstractions:
+  - 1 # 会話履歴
+  - 2 # LLM接続
+  - 4 # スキーマ生成
+  - 3 # ツール基盤
+  - 5 # 構造化出力
+  - 0 # 実行ループ
+
+relationships:
+  - from_abstraction: 2 # LLM接続
+    to_abstruction: 1 # 会話履歴
+    label: "変換する"
+  - from_abstraction: 4 # スキーマ生成
+    to_abstruction: 2 # LLM接続
+    label: "定義を渡す"
+  - from_abstraction: 3 # ツール基盤
+    to_abstruction: 4 # スキーマ生成
+    label: "利用する"
+  - from_abstraction: 5 # 構造化出力
+    to_abstruction: 3 # ツール基盤
+    label: "追加する"
+  - from_abstraction: 0 # 実行ループ
+    to_abstruction: 1 # 会話履歴
+    label: "読み書きする"
+  - from_abstraction: 0 # 実行ループ
+    to_abstruction: 2 # LLM接続
+    label: "問い合わせる"
+  - from_abstraction: 0 # 実行ループ
+    to_abstruction: 3 # ツール基盤
+    label: "実行する"
+  - from_abstraction: 0 # 実行ループ
+    to_abstruction: 5 # 構造化出力
+    label: "抽出する"
+
