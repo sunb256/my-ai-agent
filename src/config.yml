@@ -1,6 +1,6 @@
 llm:
-  model: "openai/your-model-name"
-  base_url: "https://your-openai-compatible-endpoint/v1"
+  model: "openai/gemma4:e4b-mlx"
+  base_url: "http://localhost:11434/v1"
   temperature: 0.2
 
 agent:

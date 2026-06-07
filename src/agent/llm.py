@@ -1,11 +1,39 @@
 import json
+import logging
 from typing import Any, Type
-from litellm import acompletion
+
 from pydantic import BaseModel, Field
 
 from .helpers import remove_code_fence
 from .types import ContentItem, Message, ToolCall, ToolResult
 from .tool_base import BaseTool
+
+# litellm ワーニング抑制
+_LITELLM_OPTIONAL_PROVIDER_WARNINGS = (
+    "could not pre-load bedrock-runtime response stream shape",
+    "could not pre-load sagemaker-runtime response stream shape",
+)
+
+class _LiteLLMOptionalProviderWarningFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        return not any(
+            warning in message for warning in _LITELLM_OPTIONAL_PROVIDER_WARNINGS
+        )
+
+def _suppress_litellm_optional_provider_warnings() -> None:
+    log_filter = _LiteLLMOptionalProviderWarningFilter()
+    for logger_name in ("LiteLLM", "litellm"):
+        logger = logging.getLogger(logger_name)
+        if not any(
+            isinstance(existing, _LiteLLMOptionalProviderWarningFilter)
+            for existing in logger.filters
+        ):
+            logger.addFilter(log_filter)
+
+_suppress_litellm_optional_provider_warnings()
+
+from litellm import acompletion  # noqa: E402
 
 class Request(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
