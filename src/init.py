@@ -1,8 +1,14 @@
 import os
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml  # type: ignore[import-untyped]
+
+from app_tools import APP_TOOLS
+
+if TYPE_CHECKING:
+    from agent.agent import Agent
+    from agent.llm import Client
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -97,3 +103,27 @@ def resolve_agent_settings(
         "instructions": str(agent.get("instructions", "")),
         "max_steps": steps,
     }
+
+
+def get_client(config: dict[str, Any]) -> "Client":
+    model, options = resolve_llm_settings(config)
+
+    from agent.llm import Client
+
+    return Client(model=model, **options)
+
+
+def get_agent(
+    config: dict[str, Any], client: "Client", max_steps: int | None
+) -> "Agent":
+    settings = resolve_agent_settings(config, max_steps)
+
+    from agent.agent import Agent
+
+    return Agent(
+        model=client,
+        tools=APP_TOOLS,
+        insts=settings["instructions"],
+        max_steps=settings["max_steps"],
+        name=settings["name"],
+    )
