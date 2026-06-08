@@ -92,6 +92,6 @@ def test_get_agent_uses_app_tools_and_max_steps_override(
 
     assert agent.client is client
     assert agent.tools == APP_TOOLS
-    assert agent.insts == "short answer"
+    assert agent.system_prompt == "short answer"
     assert agent.max_step == 8
-    assert agent.name == "sample"
+    assert agent.role == "sample"

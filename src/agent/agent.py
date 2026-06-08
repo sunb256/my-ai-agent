@@ -20,16 +20,16 @@ class Agent:
         self,
         client: Client,
         tools: list[BaseTool] | None = None,
-        insts: str = "",
+        system_prompt: str = "",
         max_steps: int = 10,
-        name: str = "agent",
+        role: str = "agent",
         desc: str = "",
         output_type: Type[BaseModel] | None = None
     ):
         self.client = client
-        self.insts = insts
+        self.system_prompt = system_prompt
         self.max_step = max_steps
-        self.name = name
+        self.role = role
         self.desc = desc
         self.output_type = output_type
 
@@ -37,7 +37,7 @@ class Agent:
         self.tools = self._setup_tools(tools or [])
     
     @property
-    def tool_dict(self):
+    def tools_dict(self):
         return {item.name: item for item in self.tools}
 
     # ---------------
@@ -66,6 +66,7 @@ class Agent:
 
         return AgentResult(output=ctx.final_result, ctx=ctx)
     
+
     async def step(self, ctx: ExecContext, verbose: bool = False) -> None:
         
         req = self._get_request(ctx)
@@ -77,7 +78,7 @@ class Agent:
         if verbose:
             self._log_response(res)
         
-        res_event = Event.new(ctx.exec_id, self.name, res.content)
+        res_event = Event.new(ctx.exec_id, self.role, res.content)
         ctx.add_event(res_event)
 
         if res.tool_calls:
@@ -114,7 +115,7 @@ class Agent:
                 results.append(tool_ret)
 
         if results:
-            tool_event = Event.new(ctx.exec_id, self.name, results)
+            tool_event = Event.new(ctx.exec_id, self.role, results)
             ctx.add_event(tool_event)
         
     # ---------------
@@ -124,8 +125,8 @@ class Agent:
     def _get_request(self, ctx: ExecContext) -> Request:
 
         system_prompt = []
-        if self.insts:
-            system_prompt.append(self.insts)
+        if self.system_prompt:
+            system_prompt.append(self.system_prompt)
 
         histories = []
         for event in ctx.events:
@@ -199,6 +200,6 @@ class Agent:
 
         for item in response.content:
             if isinstance(item, Message):
-                logger.info(f"[{self.name}] {item.content}")
+                logger.info(f"[{self.role}] {item.content}")
             elif isinstance(item, ToolCall):
-                logger.info(f"[{self.name}] Tool call: {item.name}({item.args})")
+                logger.info(f"[{self.role}] Tool call: {item.name}({item.args})")
