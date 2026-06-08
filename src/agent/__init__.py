@@ -1,1 +1,0 @@
-"""Minimal AI agent package."""

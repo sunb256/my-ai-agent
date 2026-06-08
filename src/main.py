@@ -29,6 +29,7 @@ def parse_args() -> argparse.Namespace:
 
 
 async def run_once(agent: Agent, prompt: str, verbose: bool) -> None:
+    
     result = await agent.run(prompt, verbose=verbose)
     if result.output is not None:
         print(result.output)

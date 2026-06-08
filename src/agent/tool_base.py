@@ -2,7 +2,7 @@ import inspect
 from abc import ABC, abstractmethod
 from typing import Any, Callable
 
-from .helpers import func_input_schema, format_tool_def
+from .helper_schema import func_input_schema, format_tool_def
 from .context import ExecContext
 
 class BaseTool(ABC):

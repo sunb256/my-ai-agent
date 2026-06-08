@@ -3,23 +3,29 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from .tool_base import BaseTool
-from .types import ContentItem
+from .types import ContentItem, ToolCall
 
 
 class Request(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
-    insts: list[str] = Field(default_factory=list)
+    system_prompt: list[str] = Field(default_factory=list)
     contents: list[ContentItem] = Field(default_factory=list)
     tools: list[BaseTool] = Field(default_factory=list)
     tool_choice: str | None = None
     model_id: str | None = None
 
-    def append_insts(self, text: str) -> None:
-        self.insts.append(text)
+    def append_prompt(self, text: str) -> None:
+        self.system_prompt.append(text)
 
+    def get_system_prompt_msgs(self) -> list[str]:
+         return [{"role": "system", "content": prompt} for prompt in self.system_prompt]
 
 class Response(BaseModel):
     content: list[ContentItem] = Field(default_factory=list)
-    err_msg: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+    err_msg: str | None = None
+
+    @property
+    def tool_calls(self):
+        return [tc for tc in self.content if isinstance(tc, ToolCall)]
