@@ -99,13 +99,13 @@ def get_agent(config: dict[str, Any], client: "Client", max_steps: int | None) -
 
     agent = require_section(config, "agent")
     name = str(agent.get("name", "sample-agent"))
-    insts = str(agent.get("instructions", ""))
+    system_prompt = str(agent.get("system_prompt", ""))
     steps = max_steps if max_steps is not None else int(agent.get("max_steps", 5))
 
     return Agent(
         client=client,
         tools=APP_TOOLS,
-        insts=insts,
+        system_prompt=system_prompt,
         max_steps=steps,
-        name=name,
+        role=name,
     )

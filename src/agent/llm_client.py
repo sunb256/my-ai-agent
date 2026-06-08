@@ -69,6 +69,7 @@ class Client:
             if request.tool_choice is not None:
                 kwargs["tool_choice"] = request.tool_choice
 
+            # call litellm api
             response = await acompletion(**kwargs)
             return self._parse_response(response)
 
