@@ -31,7 +31,7 @@ def test_generate_builds_litellm_messages(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr("agent.llm_client.acompletion", fake_completion)
     client = Client(model="openai/test", api_key="secret")
     request = Request(
-        insts=["Be concise."],
+        system_prompt=["Be concise."],
         contents=[
             Message(role="user", content="Add numbers."),
             ToolCall(
