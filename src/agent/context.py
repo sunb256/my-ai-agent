@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional
 from pydantic import BaseModel
 
 from .types import Event
@@ -13,6 +13,8 @@ class ExecContext:
     step: int = 0
     state: dict[str, Any] = field(default_factory=dict)
     final_result: str | BaseModel | None = None
+
+    code_env: Optional[Any] = None
 
     def add_event(self, event: Event):
         self.events.append(event)

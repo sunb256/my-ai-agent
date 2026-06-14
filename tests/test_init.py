@@ -82,7 +82,7 @@ def test_get_agent_uses_app_tools_and_max_steps_override(
         },
         "agent": {
             "name": "sample",
-            "instructions": "short answer",
+            "system_prompt": "short answer",
             "max_steps": 5,
         },
     }
@@ -91,7 +91,11 @@ def test_get_agent_uses_app_tools_and_max_steps_override(
     agent = get_agent(config, client, max_steps=8)
 
     assert agent.client is client
-    assert agent.tools == APP_TOOLS
+    assert [tool.name for tool in agent.tools] == [
+        *[tool.name for tool in APP_TOOLS],
+        "exec_python",
+        "bash_tool",
+    ]
     assert agent.system_prompt == "short answer"
     assert agent.max_step == 8
     assert agent.role == "sample"

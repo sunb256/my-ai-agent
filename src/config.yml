@@ -9,3 +9,4 @@ agent:
     あなたは簡潔に回答するAIアシスタントです。
     必要なら利用可能なツールを使ってください。
   max_steps: 5
+  code_exec: True
