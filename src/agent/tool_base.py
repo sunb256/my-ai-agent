@@ -34,11 +34,19 @@ class FuncTool(BaseTool):
                  func: Callable,
                  name: str | None = None,
                  desc: str | None = None,
-                 tool_def: dict[str, Any] | None = None):
+                 tool_def: dict[str, Any] | None = None,
+                 sandbox_exec: bool = False):
     
         self.func = func
         self.needs_ctx = "ctx" in inspect.signature(func).parameters
+        self.sandbox_exec = sandbox_exec
 
+        if sandbox_exec and self.needs_ctx:
+            raise ValueError(
+                f"Tool '{func.__name__}' cannot be sandbox_exec "
+                "because it requires 'ctx' parameter"
+            )
+        
         resolve_name = name or func.__name__
         resolve_desc = desc or (func.__doc__ or "").strip()
 
@@ -67,12 +75,40 @@ class FuncTool(BaseTool):
         params = func_input_schema(self.func)
         return format_tool_def(self.name, self.desc, params)
     
-def tool(func=None, *, name=None, desc=None):
+    def get_source_code(self) -> str:
+        if not self.sandbox_exec:
+            raise ValueError(f"Tool {self.name} is not marked as sandbox_exec")
+        
+        source = inspect.getsource(self.func)
+        lines = source.split('\n')
+        filtered_lines = []
+        skip_decorator = False
+
+        for line in lines:
+            stripped = line.strip()
+
+            if stripped.startswith('@tool'):
+                skip_decorator = True
+            
+                if '(' not in stripped or ')' in stripped:
+                    skip_decorator = False
+                continue
+
+            if skip_decorator:
+                if ')' in stripped:
+                    skip_decorator = False
+                continue
+            
+            filtered_lines.append(line)
+        return "\n".join(filtered_lines)
+    
+def tool(func=None, *, name=None, desc=None, sandbox_exec=False):
     def decorator(fn):
         return FuncTool(
             func=fn,
             name=name,
-            desc=desc
+            desc=desc,
+            sandbox_exec=sandbox_exec
         )
     
     if func is None:
