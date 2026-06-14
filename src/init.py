@@ -102,6 +102,7 @@ def get_agent(config: dict[str, Any], client: "Client", max_steps: int | None) -
     system_prompt = str(agent.get("system_prompt", ""))
     steps = max_steps if max_steps is not None else int(agent.get("max_steps", 5))
     is_code_exec = agent.get("code_exec", True)
+    code_exec_image = str(agent.get("code_exec_image", "python")).strip()
 
     return Agent(
         client=client,
@@ -109,5 +110,6 @@ def get_agent(config: dict[str, Any], client: "Client", max_steps: int | None) -
         system_prompt=system_prompt,
         max_steps=steps,
         role=name,
-        is_code_exec=is_code_exec
+        is_code_exec=is_code_exec,
+        code_exec_image=code_exec_image
     )

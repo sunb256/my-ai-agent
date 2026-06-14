@@ -8,5 +8,7 @@ agent:
   system_prompt: |
     あなたは簡潔に回答するAIアシスタントです。
     必要なら利用可能なツールを使ってください。
-  max_steps: 5
+  max_steps: 10
   code_exec: True
+  # code_exec_image: "python"
+  code_exec_image: "ai-agent-python:local"

@@ -12,7 +12,7 @@ from .helper_schema import format_tool_def
 from .context import AgentResult, ExecContext
 from .const import STR_SUCCESS, STR_ERROR, USER
 
-from .code_exec import exec_python, bash_tool
+from .code_exec import exec_python, bash_tool, upload_file
 
 from .helper_agent import *
 
@@ -30,6 +30,7 @@ class Agent:
         desc: str = "",
         output_type: Type[BaseModel] | None = None,
         is_code_exec: bool = True,
+        code_exec_image: str = "python",
     ):
         self.client = client
         self.system_prompt = system_prompt
@@ -39,6 +40,7 @@ class Agent:
         self.output_type = output_type
 
         self.is_code_exec = is_code_exec
+        self.code_exec_image = code_exec_image
         self._sandbox_tools: list[FuncTool] = []
         
         self.output_tool_name: str | None = None
@@ -225,7 +227,7 @@ class Agent:
             self._sandbox_tools.append(t)
 
         if self.is_code_exec:
-            tools.extend([exec_python, bash_tool])
+            tools.extend([exec_python, bash_tool, upload_file])
 
         return tools
     
@@ -238,7 +240,7 @@ class Agent:
             name = f"agent-{ctx.exec_id}"
             sandbox = await Sandbox.create(
                 name,
-                image="python",
+                image=self.code_exec_image,
                 cpus=1,
                 memory=512,
                 replace=True

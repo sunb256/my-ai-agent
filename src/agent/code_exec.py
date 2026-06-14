@@ -92,7 +92,7 @@ async def bash_tool(ctx: ExecContext, command:str):
 
 
 @tool
-def upload_file(ctx: ExecContext, local_path: str, sandbox_path: str = None) -> str:
+async def upload_file(ctx: ExecContext, local_path: str, sandbox_path: str = None) -> str:
 
     sandbox = ctx.code_env
     if sandbox is None:
@@ -102,7 +102,9 @@ def upload_file(ctx: ExecContext, local_path: str, sandbox_path: str = None) -> 
         sandbox_path = f"/tmp/{os.path.basename(local_path)}"
 
     try:
-        sandbox.fs.copy_from_host(local_path, sandbox_path)
+        result = sandbox.fs.copy_from_host(local_path, sandbox_path)
+        if inspect.isawaitable(result):
+            await result
         return f"file uploaded to {sandbox_path}"
 
     except Exception as e:
