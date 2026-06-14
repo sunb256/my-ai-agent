@@ -84,6 +84,7 @@ def test_get_agent_uses_app_tools_and_max_steps_override(
             "name": "sample",
             "system_prompt": "short answer",
             "max_steps": 5,
+            "code_exec_image": "my-python-data-image:local",
         },
     }
 
@@ -95,7 +96,9 @@ def test_get_agent_uses_app_tools_and_max_steps_override(
         *[tool.name for tool in APP_TOOLS],
         "exec_python",
         "bash_tool",
+        "upload_file",
     ]
     assert agent.system_prompt == "short answer"
     assert agent.max_step == 8
     assert agent.role == "sample"
+    assert agent.code_exec_image == "my-python-data-image:local"
