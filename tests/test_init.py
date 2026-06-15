@@ -85,6 +85,7 @@ def test_get_agent_uses_app_tools_and_max_steps_override(
             "system_prompt": "short answer",
             "max_steps": 5,
             "code_exec_image": "my-python-data-image:local",
+            "skills_dir": "resources/skills",
         },
     }
 
@@ -102,3 +103,4 @@ def test_get_agent_uses_app_tools_and_max_steps_override(
     assert agent.max_step == 8
     assert agent.role == "sample"
     assert agent.code_exec_image == "my-python-data-image:local"
+    assert agent.skills_path == "resources/skills"

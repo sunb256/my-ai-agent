@@ -13,7 +13,8 @@ from .context import AgentResult, ExecContext
 from .const import STR_SUCCESS, STR_ERROR, USER
 
 from .code_exec import exec_python, bash_tool, upload_file
-
+from .skills import find_skill, make_skills_prompt
+from .helper_skill import upload_skills_to_sandbox
 from .helper_agent import *
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ class Agent:
         output_type: Type[BaseModel] | None = None,
         is_code_exec: bool = True,
         code_exec_image: str = "python",
+        skills_path: str | None = None,
     ):
         self.client = client
         self.system_prompt = system_prompt
@@ -42,6 +44,7 @@ class Agent:
         self.is_code_exec = is_code_exec
         self.code_exec_image = code_exec_image
         self._sandbox_tools: list[FuncTool] = []
+        self.skills_path = skills_path
         
         self.output_tool_name: str | None = None
         self.tools = self._setup_tools(tools or [])
@@ -154,10 +157,20 @@ class Agent:
         if sandbox_prompt:
             system_prompt.append(sandbox_prompt)
 
+        # instruction
         histories = []
         for event in ctx.events:
             histories.extend(event.content)
         
+        if self.skills_path:
+            try:
+                skill = find_skill(self.skills_path)
+                skills_prompt = make_skills_prompt(skill)
+                if skills_prompt:
+                    system_prompt.append(skills_prompt)
+            except Exception:
+                pass
+
         if self.output_tool_name:
             tool_choice = "required"
         elif self.tools:
@@ -248,13 +261,20 @@ class Agent:
 
             await self._register_sandbox_tools(sandbox)
             ctx.code_env = sandbox
+
+            await upload_skills_to_sandbox(sandbox, self.skills_path)
         
         except Exception:
             ctx.code_env = None
-            if sandbox is not None:
-                result = sandbox.kill()
-                if inspect.isawaitable(result):
-                    await result
+
+            if sandbox is None:
+                logger.warning("failed to set up code execution environment", exc_info=True)
+                return
+
+            result = sandbox.kill()
+            if inspect.isawaitable(result):
+                await result
+
             logger.warning("failed to set up code execution environment", exc_info=True)
     
     async def _register_sandbox_tools(self, sandbox) -> None:

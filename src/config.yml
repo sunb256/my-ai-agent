@@ -12,3 +12,4 @@ agent:
   code_exec: True
   # code_exec_image: "python"
   code_exec_image: "ai-agent-python:local"
+  skills_dir: "resources/skills"

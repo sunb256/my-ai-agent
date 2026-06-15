@@ -103,6 +103,7 @@ def get_agent(config: dict[str, Any], client: "Client", max_steps: int | None) -
     steps = max_steps if max_steps is not None else int(agent.get("max_steps", 5))
     is_code_exec = agent.get("code_exec", True)
     code_exec_image = str(agent.get("code_exec_image", "python")).strip()
+    skills_path = str(agent.get("skills_dir", "")).strip() or None
 
     return Agent(
         client=client,
@@ -111,5 +112,6 @@ def get_agent(config: dict[str, Any], client: "Client", max_steps: int | None) -
         max_steps=steps,
         role=name,
         is_code_exec=is_code_exec,
-        code_exec_image=code_exec_image
+        code_exec_image=code_exec_image,
+        skills_path=skills_path
     )
