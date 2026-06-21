@@ -1,9 +1,14 @@
+from datetime import datetime
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 from pydantic import BaseModel
 
-from .types import Event
+from agent.memory.session import Session, BaseSessionManager
+from agent.types import Event, ToolCall
+
+if TYPE_CHECKING:
+      from agent.memory.long_term import TaskMemoryManager
 
 @dataclass
 class ExecContext:
@@ -14,10 +19,19 @@ class ExecContext:
     state: dict[str, Any] = field(default_factory=dict)
     final_result: str | BaseModel | None = None
 
+    # session
+    session: Session | None = None
+    session_manager: BaseSessionManager | None = None
+    # long memory
+    memory_manager: "TaskMemoryManager | None" = None
+
     code_env: Optional[Any] = None
 
     def add_event(self, event: Event):
         self.events.append(event)
+
+        if self.session:
+            self.session.update_at = datetime.now()
 
     def increment(self):
         self.step += 1
@@ -32,7 +46,20 @@ class ExecContext:
 
         return self.events[-1]
 
+
 @dataclass
 class AgentResult:
     output: Any
     ctx: ExecContext
+    status: str = "complete"  # complete | pending | error
+    pending_tc: list = field(default_factory=list)
+
+class PendingToolCall(BaseModel):
+    tool_call: ToolCall
+    confirm: str
+
+class ToolConfirm(BaseModel):
+    tool_call_id: str
+    approved: bool
+    modified_args: dict | None = None
+    

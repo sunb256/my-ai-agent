@@ -1,28 +1,52 @@
 import inspect
 from abc import ABC, abstractmethod
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
-from .helper_schema import func_input_schema, format_tool_def
-from .context import ExecContext
+from agent.helper_schema import func_input_schema, format_tool_def
+from agent.context import ExecContext
+
+if TYPE_CHECKING:
+      from agent.llm import Request
 
 class BaseTool(ABC):
+
+    DEFAULT_CONFIRMATION_TEMPLATE = (
+        "The agent wants to execute '{name}' with arguments: {arguments}. "
+        "Do you approve?"
+    )
 
     def __init__(self,
                  name: str | None = None,
                  desc: str | None = None,
-                 tool_def: dict[str, Any] | None = None):
+                 tool_def: dict[str, Any] | None = None,
+                 need_confirm: bool = False,
+                 confirm_msg_tmpl: str = "",
+                 ):
     
         self.name = name or self.__class__.__name__
         self.desc = desc or self.__doc__ or ""
         self._tool_def = tool_def
+
+        self.need_confirm = need_confirm
+        self.confirm_msg_tmpl = (
+            confirm_msg_tmpl
+            if confirm_msg_tmpl
+            else self.DEFAULT_CONFIRMATION_TEMPLATE
+        )
     
     @property
     def tool_def(self) -> dict[str, Any] | None:
         return self._tool_def
     
+    async def process_llm_request(self, ctx: "ExecContext", req: "Request") -> None:
+        return None
+
     @abstractmethod
     async def exec(self, ctx: ExecContext, **kwargs) -> Any:
         pass
+
+    def get_confirm_msg(self, args: dict) -> str:
+        return self.confirm_msg_tmpl.format(name=self.name, args=args)
 
     async def __call__(self, ctx: ExecContext, **kwargs) -> Any:
         return await self.exec(ctx, **kwargs)
@@ -35,7 +59,9 @@ class FuncTool(BaseTool):
                  name: str | None = None,
                  desc: str | None = None,
                  tool_def: dict[str, Any] | None = None,
-                 sandbox_exec: bool = False):
+                 sandbox_exec: bool = False,
+                 need_confirm: bool = False,
+                 confirm_msg_tmpl: str = ""):
     
         self.func = func
         self.needs_ctx = "ctx" in inspect.signature(func).parameters
@@ -53,7 +79,9 @@ class FuncTool(BaseTool):
         super().__init__(
             name = resolve_name,
             desc = resolve_desc,
-            tool_def = tool_def
+            tool_def = tool_def,
+            need_confirm = need_confirm,
+            confirm_msg_tmpl = confirm_msg_tmpl
         )
 
         if self._tool_def is None:
@@ -102,13 +130,17 @@ class FuncTool(BaseTool):
             filtered_lines.append(line)
         return "\n".join(filtered_lines)
     
-def tool(func=None, *, name=None, desc=None, sandbox_exec=False):
+def tool(func=None, *, 
+         name=None, desc=None, sandbox_exec=False, need_confirm: bool = False, confirm_msg_tmpl: str | None = None):
+    
     def decorator(fn):
         return FuncTool(
             func=fn,
             name=name,
             desc=desc,
-            sandbox_exec=sandbox_exec
+            sandbox_exec=sandbox_exec,
+            need_confirm = need_confirm,
+            confirm_msg_tmpl = confirm_msg_tmpl or ""
         )
     
     if func is None:

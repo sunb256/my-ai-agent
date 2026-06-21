@@ -1,6 +1,6 @@
 import logging
 import inspect
-from typing import Any, Type
+from typing import TYPE_CHECKING, Any, Optional, Type, Callable
 from pydantic import BaseModel
 import json
 
@@ -9,13 +9,23 @@ from .llm_client import Client
 from .types import Event, Message, ToolCall, ToolResult
 from .tool_base import BaseTool, FuncTool
 from .helper_schema import format_tool_def
-from .context import AgentResult, ExecContext
+from .context import AgentResult, ExecContext, PendingToolCall, ToolConfirm
 from .const import STR_SUCCESS, STR_ERROR, USER
 
+from .memory.session import BaseSessionManager
 from .code_exec import exec_python, bash_tool, upload_file
 from .skills import find_skill, make_skills_prompt
 from .helper_skill import upload_skills_to_sandbox
-from .helper_agent import *
+from .helper_agent import (
+      get_final_by_output_tool,
+      get_final_by_plain_message,
+      is_final_by_output_tool,
+      is_final_by_plain_message,
+  )
+
+if TYPE_CHECKING:
+    from .memory.long_term import TaskMemoryManager
+
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +33,7 @@ class Agent:
 
     def __init__(
         self,
+        # baseic feature
         client: Client,
         tools: list[BaseTool] | None = None,
         system_prompt: str = "",
@@ -30,8 +41,17 @@ class Agent:
         role: str = "agent",
         desc: str = "",
         output_type: Type[BaseModel] | None = None,
+        # callback
+        before_tool_cb: list[Callable] | None = None,
+        after_tool_cb: list[Callable] | None = None,
+        # session
+        session_manager: Optional["BaseSessionManager"] = None,
+        memory_manager: Optional["TaskMemoryManager"] = None,
+        before_llm_cb: list[Callable] | None = None,
+        # code exec
         is_code_exec: bool = True,
         code_exec_image: str = "python",
+        # skill
         skills_path: str | None = None,
     ):
         self.client = client
@@ -41,9 +61,17 @@ class Agent:
         self.desc = desc
         self.output_type = output_type
 
+        self.before_tool_cb = before_tool_cb or []
+        self.after_tool_cb = after_tool_cb or []
+        
+        self.session_manager = session_manager
+        self.memory_manager = memory_manager
+        self.before_llm_cb = before_llm_cb or []
+        
         self.is_code_exec = is_code_exec
         self.code_exec_image = code_exec_image
         self._sandbox_tools: list[FuncTool] = []
+
         self.skills_path = skills_path
         
         self.output_tool_name: str | None = None
@@ -57,10 +85,30 @@ class Agent:
     # - Core loop
     # ---------------
 
-    async def run(self, prompt, ctx: ExecContext | None = None, verbose: bool = False) -> AgentResult:
+    async def run(self, 
+                  prompt, 
+                  ctx: ExecContext | None = None, 
+                  session_id: str | None = None,
+                  confirm: list[ToolConfirm] | None = None,
+                  verbose: bool = False) -> AgentResult:
+
+        session = None
+        if session_id and self.session_manager:
+            session = await self.session_manager.get_or_create(session_id)
 
         if ctx is None:
-            ctx = ExecContext()
+            ctx = ExecContext(session=session, session_manager=self.session_manager, memory_manager=self.memory_manager)
+
+            if session:
+                ctx.events = list(session.events)
+                ctx.state = dict(session.state)
+        
+        elif ctx.memory_manager is None:
+            ctx.memory_manager = self.memory_manager
+
+        # hitl
+        if confirm:
+            await self._process_confirm(ctx, confirm)
         
         if prompt:
             user_event = Event.new_msg(ctx.exec_id, USER, prompt)
@@ -73,7 +121,15 @@ class Agent:
         try:
             while ctx.is_continue(self.max_step):
 
-                await self.step(ctx, verbose=verbose)
+                result = await self.step(ctx, verbose=verbose)
+
+                # hitl
+                if result and result.status == "pending":
+                    if session and self.session_manager:
+                        session.events = list(ctx.events)
+                        session.state = dict(ctx.state)
+                        await self.session_manager.save(session)
+                    return result
 
                 event = ctx.last_event
                 if event is None:
@@ -81,6 +137,19 @@ class Agent:
 
                 if self._is_final_response(event):
                     ctx.final_result = self._get_final_result(event)
+
+            # save memory
+            if self.memory_manager:
+                try:
+                    await self.memory_manager.save(ctx)
+                except Exception as e:
+                    logger.warning(f"failed to save memory {e}")
+
+            # save session
+            if session and self.session_manager:
+                session.events = list(ctx.events)
+                session.state = dict(ctx.state)
+                await self.session_manager.save(session)
 
             return AgentResult(output=ctx.final_result, ctx=ctx)
 
@@ -91,10 +160,20 @@ class Agent:
                     await result
 
 
-    async def step(self, ctx: ExecContext, verbose: bool = False) -> None:
+    async def step(self, ctx: ExecContext, verbose: bool = False) -> AgentResult | None:
         
-        req = self._get_request(ctx)
-        res = await self.think(req)
+        req = await self._get_request(ctx)
+
+        for callback in self.before_llm_cb:
+            cb_result = callback(ctx, req)
+            if inspect.isawaitable(cb_result):
+                cb_result = await cb_result
+
+            if isinstance(cb_result, Response):
+                res = cb_result
+                break
+        else:
+            res = await self.think(req)
 
         if res.err_msg:
             raise RuntimeError(res.err_msg)
@@ -105,18 +184,23 @@ class Agent:
         res_event = Event.new(ctx.exec_id, self.role, res.content)
         ctx.add_event(res_event)
 
-        if res.tool_calls:
-            await self.act(ctx, res.tool_calls)
+        tool_calls = [c for c in res.content if isinstance(c, ToolCall)]
+        if tool_calls:
+            result = await self.act(ctx, tool_calls)
+            if result and result.status == "pending":
+                return result
         
         ctx.increment()
+        return None
 
 
-    async def think(self, request: Request) -> Response:
-        return await self.client.call_llm(request)
+    async def think(self, req: Request) -> Response:
+        return await self.client.call_llm(req)
     
-    async def act(self, ctx: ExecContext, tool_calls: list[ToolCall]) -> None:
+    async def act(self, ctx: ExecContext, tool_calls: list[ToolCall]) -> AgentResult | None:
         
         results: list[Message | ToolCall | ToolResult] = []
+        pending = []
 
         for tool_call in tool_calls:
 
@@ -126,27 +210,75 @@ class Agent:
                 results.append(tool_ret)
                 continue
 
-            tool_call_obj = self.tools_dict[tool_call.name]
+            tool_obj = self.tools_dict[tool_call.name]
+
+            # confirm
+            if tool_obj.need_confirm:
+                msg = tool_obj.get_confirm_msg(tool_call.args)
+                pending.append(PendingToolCall(tool_call=tool_call, confirm=msg))
+                continue
+
+            # before callback
+            skip = False
+            for callback in self.before_tool_cb:
+                cb_ret1 = callback(ctx, tool_call)
+                if inspect.isawaitable(cb_ret1):
+                    cb_ret1 = await cb_ret1
+
+                if cb_ret1 is not None:
+                    tool_result = ToolResult.new(tool_call, STR_SUCCESS, cb_ret1)
+                    results.append(tool_result)
+                    skip = True
+                    break
+            
+            if skip:
+                continue
+            
+            # main tool_call
+            tool_res = None
 
             try:
-                # call tool
-                output = await tool_call_obj(ctx, **tool_call.args)
-                tool_ret = ToolResult.new(tool_call, STR_SUCCESS, output)
-                results.append(tool_ret)
-
+                tool_res = await tool_obj(ctx, **tool_call.args)
+                tool_ret = ToolResult.new(tool_call, STR_SUCCESS, tool_res)
+                
             except Exception as e:
-                tool_ret = ToolResult.new(tool_call, STR_ERROR, str(e))
-                results.append(tool_ret)
+                tool_res = str(e)
+                tool_ret = ToolResult.new(tool_call, STR_ERROR, tool_res)
 
+            # after callback
+            for callback in self.after_tool_cb:
+                cb_ret2 = callback(ctx, tool_ret)
+                if inspect.isawaitable(cb_ret2):
+                    cb_ret2 = await cb_ret2
+
+                if cb_ret2 is not None:
+                    if isinstance(cb_ret2, ToolResult):
+                        tool_ret = cb_ret2
+                    else:
+                        tool_ret = ToolResult.new(tool_call, STR_SUCCESS, cb_ret2)
+                    break
+            
+            results.append(tool_ret)
+
+        if pending:
+            ctx.state["pending_tool_calls"] = [p.model_dump() for p in pending]
+            if results:
+                tool_event = Event.new(ctx.exec_id, self.role, results)
+                ctx.add_event(tool_event)
+            return AgentResult(output=None, ctx=ctx, status="pending", pending_tc=pending)
+        
+        # record tool_result
         if results:
             tool_event = Event.new(ctx.exec_id, self.role, results)
             ctx.add_event(tool_event)
+        
+        return None
         
     # ---------------
     # - internal
     # ---------------
 
-    def _get_request(self, ctx: ExecContext) -> Request:
+    async def _get_request(self, ctx: ExecContext) -> Request:
 
         system_prompt = []
         if self.system_prompt:
@@ -171,19 +303,29 @@ class Agent:
             except Exception:
                 pass
 
+        llm_tools = [tool for tool in self.tools if tool.tool_def is not None]
+
         if self.output_tool_name:
             tool_choice = "required"
+        elif llm_tools:
+            tool_choice = "auto"
         elif self.tools:
             tool_choice = "auto"
         else:
             tool_choice = None
         
-        return Request(
+        req = Request(
             system_prompt=system_prompt,
             contents=histories,
-            tools=self.tools,
-            tool_choice=tool_choice
+            tools=llm_tools,
+            tool_choice=tool_choice,
         )
+
+        for tool_obj in self.tools:
+            await tool_obj.process_llm_request(ctx, req)
+
+        return req
+        
     
     def _is_final_response(self, event: Event) -> bool:
         if self.output_tool_name:
@@ -241,6 +383,10 @@ class Agent:
 
         if self.is_code_exec:
             tools.extend([exec_python, bash_tool, upload_file])
+
+        if self.memory_manager:
+            from .tools.memory_tool import MemoryTool
+            tools.append(MemoryTool())
 
         return tools
     
@@ -324,9 +470,45 @@ class Agent:
            f"{tools_json}"
         )
 
-    def _log_response(self, response: Response):
+    async def _process_confirm(self, ctx: ExecContext, confirms: list[ToolConfirm]):
 
-        for item in response.content:
+        raw_pending = ctx.state.pop("pending_tool_calls", [])
+        pending = [PendingToolCall.model_validate(d) for d in raw_pending]
+
+        tool_dict = {t.name: t for t in self.tools}
+        results = []
+
+        for pending_call in pending:
+
+            tc = pending_call.tool_call
+            conf = next((c for c in confirms if c.tool_call_id  == tc.tool_call_id), None,)
+
+            if conf and conf.approved:
+
+                args = conf.modified_args or tc.args
+                tool_obj = tool_dict.get(tc.name)
+
+                if tool_obj:
+                    try:
+                        output = await tool_obj(ctx, **args)
+                        tool_result = ToolResult.new(tc, STR_SUCCESS, output)
+                    except Exception as e:
+                        tool_result = ToolResult.new(tc, STR_ERROR, str(e))
+                else:
+                    tool_result = ToolResult.new(tc, STR_ERROR)
+            else:
+                tool_result = ToolResult.new(tc, STR_ERROR, "User denied the tool execution.")
+
+            results.append(tool_result)
+
+        if results:
+            event = Event.new(ctx.exec_id, self.role, results)
+            ctx.add_event(event)
+
+
+    def _log_response(self, res: Response):
+
+        for item in res.content:
             if isinstance(item, Message):
                 logger.info(f"[{self.role}] {item.content}")
             elif isinstance(item, ToolCall):

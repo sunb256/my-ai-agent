@@ -49,15 +49,64 @@ def _load_acompletion():
 acompletion = _load_acompletion()
 
 
+class MessageHelper:
+
+    @staticmethod
+    def build_msgs(req: Request) -> list[dict[str, Any]]:
+        msgs = list(req.get_system_prompt_msgs())
+
+        for item in req.contents:
+            if isinstance(item, Message):
+                msgs.append(MessageHelper.message(item))
+            elif isinstance(item, ToolCall):
+                msgs.append(MessageHelper.tool_call(item))
+            elif isinstance(item, ToolResult):
+                msgs.append(MessageHelper.tool_result(item))
+
+        return msgs
+
+    @staticmethod
+    def message(item: Message) -> dict[str, Any]:
+        return {
+            "role": item.role,
+            "content": item.content,
+        }
+
+    @staticmethod
+    def tool_call(item: ToolCall) -> dict[str, Any]:
+        return {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": item.tool_call_id,
+                    "type": "function",
+                    "function": {
+                        "name": item.name,
+                        "arguments": json.dumps(item.args, ensure_ascii=False),
+                    },
+                }
+            ],
+        }
+
+    @staticmethod
+    def tool_result(item: ToolResult) -> dict[str, Any]:
+        return {
+            "role": "tool",
+            "content": str(item.content[0]) if item.content else "",
+            "tool_call_id": item.tool_call_id,
+        }
+
 class Client:
     def __init__(self, model: str, **config: Any):
         self.model = model
         self.config = config
         
-    async def call_llm(self, request: Request) -> Response:
+    async def call_llm(self, req: Request) -> Response:
         try:
-            msgs = self._build_msgs(request)
-            tools = [tool.tool_def for tool in request.tools]
+            # msgs = self._build_msgs(req)
+            msgs = MessageHelper.build_msgs(req)
+            tools = [tool.tool_def for tool in req.tools]
 
             kwargs = {
                 "model": self.model,
@@ -66,8 +115,8 @@ class Client:
                 **self.config,
             }
 
-            if request.tool_choice is not None:
-                kwargs["tool_choice"] = request.tool_choice
+            if req.tool_choice is not None:
+                kwargs["tool_choice"] = req.tool_choice
 
             # call litellm api
             response = await acompletion(**kwargs)
@@ -76,49 +125,49 @@ class Client:
         except Exception as error:
             return Response(err_msg=str(error))
 
-    def _build_msgs(self, request: Request) -> list[dict[str, Any]]:
-        msgs = request.get_system_prompt_msgs()
+    # def _build_msgs(self, req: Request) -> list[dict[str, Any]]:
+    #     msgs = req.get_system_prompt_msgs()
 
-        for item in request.contents:
-            if isinstance(item, Message):
-                msgs.append(self._message(item))
-            elif isinstance(item, ToolCall):
-                msgs.append(self._tool_call(item))
-            elif isinstance(item, ToolResult):
-                msgs.append(self._tool_result(item))
+    #     for item in req.contents:
+    #         if isinstance(item, Message):
+    #             msgs.append(self._message(item))
+    #         elif isinstance(item, ToolCall):
+    #             msgs.append(self._tool_call(item))
+    #         elif isinstance(item, ToolResult):
+    #             msgs.append(self._tool_result(item))
 
-        return msgs
+    #     return msgs
 
-    def _message(self, item: Message) -> dict[str, Any]:
-        return {
-                  "role": item.role, 
-                  "content": item.content
-                }
+    # def _message(self, item: Message) -> dict[str, Any]:
+    #     return {
+    #               "role": item.role, 
+    #               "content": item.content
+    #             }
 
-    def _tool_call(self, item: ToolCall) -> dict[str, Any]:
-        return {
-                  "role": "assistant",
-                  "content": None,
-                  "tool_calls": [
-                      {
-                          "id": item.tool_call_id,
-                          "type": "function",
-                          "function": {
-                              "name": item.name,
-                              "arguments": json.dumps(item.args),
-                          },
-                      }
-                  ],
-                }
+    # def _tool_call(self, item: ToolCall) -> dict[str, Any]:
+    #     return {
+    #               "role": "assistant",
+    #               "content": None,
+    #               "tool_calls": [
+    #                   {
+    #                       "id": item.tool_call_id,
+    #                       "type": "function",
+    #                       "function": {
+    #                           "name": item.name,
+    #                           "arguments": json.dumps(item.args),
+    #                       },
+    #                   }
+    #               ],
+    #             }
 
-    def _tool_result(self, item: ToolResult) -> dict[str, Any]:
-        return {
-                  "role": "tool",
-                  "content": str(item.content[0]) if item.content else "",
-                  "tool_call_id": item.tool_call_id,
-                }
+    # def _tool_result(self, item: ToolResult) -> dict[str, Any]:
+    #     return {
+    #               "role": "tool",
+    #               "content": str(item.content[0]) if item.content else "",
+    #               "tool_call_id": item.tool_call_id,
+    #             }
 
-    def _parse_response(self, response: Any) -> Response:
+    def _parse_response(self, res: Any) -> Response:
         """
         # normal call
         [
@@ -150,14 +199,14 @@ class Client:
         }
         """
 
-        choice = response.choices[0]
+        choice = res.choices[0]
         contents = self._parse_content(choice.message)
 
         return Response(
             content=contents,
             metadata={
-                "input_tokens": response.usage.prompt_tokens,
-                "output_tokens": response.usage.completion_tokens,
+                "input_tokens": res.usage.prompt_tokens,
+                "output_tokens": res.usage.completion_tokens,
             },
         )
 
@@ -187,10 +236,10 @@ class Client:
     async def ask(
         self,
         prompt: str,
-        response_format: Type[BaseModel] | None = None,
+        res_format: Type[BaseModel] | None = None,
     ) -> str | BaseModel:
         
-        inst = self._ask_inst(prompt, response_format)
+        inst = self._ask_inst(prompt, res_format)
         req = Request(
             model_id=self.model,
             system_prompt=[inst],
@@ -201,28 +250,28 @@ class Client:
         if res.err_msg:
             raise RuntimeError(res.err_msg)
 
-        text = self._response_text(res)
-        if response_format is None:
+        text = self._res_text(res)
+        if res_format is None:
             return text
 
         json_text = self._clean_json(text)
-        aaa = response_format.model_validate_json(json_text)
-        print(f"aaa: {aaa}")
-        return aaa
+        res = res_format.model_validate_json(json_text)
+        print(f"res: {res}")
+        return res
 
-    def _ask_inst(self, prompt: str, response_format: Type[BaseModel] | None) -> str:
-        if response_format is None:
+    def _ask_inst(self, prompt: str, res_format: Type[BaseModel] | None) -> str:
+        if res_format is None:
             return prompt
 
-        schema_text = json.dumps(response_format.model_json_schema())
+        schema_text = json.dumps(res_format.model_json_schema())
 
         return (
             f"{prompt}\n\n"
             f"Respond ONLY with valid JSON matching this schema:\n{schema_text}"
         )
 
-    def _response_text(self, response: Response) -> str:
-        for item in response.content:
+    def _res_text(self, res: Response) -> str:
+        for item in res.content:
             if isinstance(item, Message):
                 return item.content
         return ""

@@ -4,9 +4,11 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
+from agent.memory.context_optimizer import ContextOptimizer
 from app_tools import APP_TOOLS
 from agent.agent import Agent
 from agent.llm_client import Client
+from agent.callbacks import search_compress
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -105,6 +107,11 @@ def get_agent(config: dict[str, Any], client: "Client", max_steps: int | None) -
     code_exec_image = str(agent.get("code_exec_image", "python")).strip()
     skills_path = str(agent.get("skills_dir", "")).strip() or None
 
+    # before_tool_cb = [approval_cb]
+    before_tool_cb = []
+    after_tool_cb = [search_compress]
+    before_llm_cb = [ContextOptimizer(client=client)]
+
     return Agent(
         client=client,
         tools=APP_TOOLS,
@@ -113,5 +120,8 @@ def get_agent(config: dict[str, Any], client: "Client", max_steps: int | None) -
         role=name,
         is_code_exec=is_code_exec,
         code_exec_image=code_exec_image,
-        skills_path=skills_path
+        skills_path=skills_path,
+        before_tool_cb=before_tool_cb,
+        after_tool_cb=after_tool_cb,
+        before_llm_cb=before_llm_cb,
     )

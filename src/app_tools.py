@@ -15,4 +15,9 @@ def add_numbers(a: int, b: int) -> int:
     return a + b
 
 
-APP_TOOLS = [get_current_time, add_numbers]
+@tool(need_confirm=True, confirm_msg_tmpl="Delete file {args}?")
+def delete_file(filepath: str) -> str:
+    """Deletes a file. This action cannot be undone."""
+    return f"File {filepath} has been deleted."
+
+APP_TOOLS = [get_current_time, add_numbers, delete_file]
