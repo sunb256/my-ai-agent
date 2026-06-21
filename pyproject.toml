@@ -5,10 +5,12 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "chromadb>=1.5.9",
     "litellm>=1.86.2",
     "microsandbox>=0.5.5",
     "pydantic>=2.13.4",
     "pyyaml>=6.0.3",
+    "scikit-learn>=1.9.0",
 ]
 
 [tool.uv]
@@ -17,7 +19,7 @@ exclude-newer = "1 week"
 cache-dir = ".uv-cache"
 
 [tool.ruff]
-line-length = 100
+line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "C901"]
