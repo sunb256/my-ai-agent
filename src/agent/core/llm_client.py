@@ -4,9 +4,9 @@ from typing import Any, Type
 
 from pydantic import BaseModel
 
-from .helper_schema import remove_code_fence
-from .llm import Request, Response
-from .types import Message, ToolCall, ToolResult
+from .helpers.schema import remove_code_fence
+from .model.llm_message import Request, Response
+from .model.types import Message, ToolCall, ToolResult
 
 
 _LITELLM_OPTIONAL_PROVIDER_WARNINGS = (

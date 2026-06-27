@@ -2,11 +2,12 @@ import inspect
 import json
 from typing import TYPE_CHECKING, Optional
 
-from agent.context import ExecContext
-from agent.types import ContentItem, Message, ToolCall, ToolResult
+from agent.core.model.context import ExecContext
+from agent.core.model.types import ContentItem, Message, ToolCall, ToolResult
 
 if TYPE_CHECKING:
-    from agent.llm_client import Request, Response, Client
+    from agent.core.llm_client import Client
+    from agent.core.model.llm_message import Request, Response
 
 
 def create_opimizer_cb(apply_opt, threashold: int = 50000):
@@ -27,7 +28,7 @@ def create_opimizer_cb(apply_opt, threashold: int = 50000):
 
 def count_tokens(req: "Request") -> int:
     import tiktoken
-    from agent.llm_client import MessageHelper
+    from agent.core.llm_client import MessageHelper
 
     try:
         encoding = tiktoken.encoding_for_model(req.model_id or "gpt-5")
@@ -211,7 +212,7 @@ def format_history(items: list[ContentItem]) -> str:
 
 
 async def generate_summary(client: "Client", history: str) -> str:
-    from agent.llm import Request
+    from agent.core.model.llm_message import Request
 
     PROMPT = """You are summarizing an AI agent's work progress.
 

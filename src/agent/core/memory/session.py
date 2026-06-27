@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
-from agent.types import Event
+from agent.core.model.types import Event
 
 class Session(BaseModel):
 

@@ -1,8 +1,8 @@
 import os
 import json
 import inspect
-from .tool_base import tool
-from .context import ExecContext
+from .model.tool_base import tool
+from .model.context import ExecContext
 
 def _wrap_python_code(code: str) -> str:
     SANDBOX_TOOLS_DIR = "/tmp"

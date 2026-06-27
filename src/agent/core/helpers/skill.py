@@ -3,7 +3,7 @@ import posixpath
 from pathlib import Path
 from typing import Any
 
-from .skills import SkillInfo, find_skill
+from agent.core.skills import SkillInfo, find_skill
 
 SANDBOX_SKILLS_DIR = "/tmp/skills"
 

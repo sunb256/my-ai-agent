@@ -1,12 +1,12 @@
 from typing import TYPE_CHECKING, Any
 
-from agent.context import ExecContext
-from agent.tool_base import BaseTool
-from agent.types import Message
+from agent.core.model.context import ExecContext
+from agent.core.model.tool_base import BaseTool
+from agent.core.model.types import Message
 
 if TYPE_CHECKING:
-    from agent.llm import Request
-    from agent.memory.long_term import TaskMemory
+    from agent.core.model.llm_message import Request
+    from agent.core.memory.long_term import TaskMemory
 
 
 class MemoryTool(BaseTool):

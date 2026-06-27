@@ -2,8 +2,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from .tool_base import BaseTool
-from .types import ContentItem, ToolCall
+from agent.core.model.tool_base import BaseTool
+from agent.core.model.types import ContentItem, ToolCall
 
 
 class Request(BaseModel):

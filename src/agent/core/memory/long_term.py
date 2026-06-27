@@ -5,8 +5,8 @@ import chromadb
 from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
 from pydantic import BaseModel, Field
 
-from agent.context import ExecContext
-from agent.types import Message, ToolCall, ToolResult, Event
+from agent.core.model.context import ExecContext
+from agent.core.model.types import Message, ToolCall, ToolResult, Event
 
 
 class TaskMemory(BaseModel):

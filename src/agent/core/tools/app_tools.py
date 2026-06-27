@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from agent.tool_base import tool
+from agent.core.model.tool_base import tool
 
 
 @tool

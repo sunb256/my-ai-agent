@@ -3,7 +3,7 @@ from typing import Literal, Any
 from pydantic import BaseModel, Field
 from datetime import datetime
 
-from .const import STR_SUCCESS, STR_ERROR
+from agent.core.helpers.const import STR_SUCCESS, STR_ERROR
 
 class Message(BaseModel):
     type: Literal["message"] = "message"

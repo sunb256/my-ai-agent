@@ -4,11 +4,11 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from agent.context import ToolConfirm
-from init import DEFAULT_CONFIG, get_agent, get_client, load_config, load_env
+from agent.core.model.context import ToolConfirm
+from agent.init import DEFAULT_CONFIG, get_agent, get_client, load_config, load_env
 
 if TYPE_CHECKING:
-    from agent.agent import Agent
+    from agent.core.agent import Agent
 
 
 def parse_args() -> argparse.Namespace:
@@ -40,7 +40,12 @@ async def run_once(agent: Agent, prompt: str, verbose: bool) -> None:
             print(pending.confirm)
             answer = input("Approve? (y/N): ").strip().lower()
 
-            confirms.append(ToolConfirm(tool_call_id=pending.tool_call.tool_call_id, approved=answer == "y",))
+            confirms.append(
+                ToolConfirm(
+                    tool_call_id=pending.tool_call.tool_call_id,
+                    approved=answer == "y",
+                )
+            )
 
         result = await agent.run(
             "",
