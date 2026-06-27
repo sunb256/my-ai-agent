@@ -4,15 +4,15 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
-from agent.memory.context_optimizer import ContextOptimizer
-from app_tools import APP_TOOLS
-from agent.agent import Agent
-from agent.llm_client import Client
-from agent.callbacks import search_compress
+from agent.core.agent import Agent
+from agent.core.callbacks import search_compress
+from agent.core.tools.app_tools import APP_TOOLS
+from agent.core.llm_client import Client
+from agent.core.memory.context_optimizer import ContextOptimizer
 
 
-ROOT_DIR = Path(__file__).resolve().parents[1]
-DEFAULT_CONFIG = ROOT_DIR / "src" / "config.yml"
+ROOT_DIR = Path(__file__).resolve().parents[2]
+DEFAULT_CONFIG = Path(__file__).resolve().parent / "config" / "config.yml"
 DEFAULT_ENV = ROOT_DIR / ".env"
 API_KEY_NAME = "OPENAI_API_KEY"
 
@@ -52,7 +52,7 @@ def load_config(path: Path) -> dict[str, Any]:
 def config_help(path: Path) -> str:
     return (
         f"Config file not found: {path}\n"
-        "Create src/config.yml with llm.model, llm.base_url, and agent settings."
+        "Create src/agent/config/config.yml with llm.model, llm.base_url, and agent settings."
     )
 
 

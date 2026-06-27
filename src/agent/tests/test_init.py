@@ -4,11 +4,11 @@ from pathlib import Path
 import pytest
 
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from app_tools import APP_TOOLS  # noqa: E402
-from init import get_agent, get_client, parse_env_line, require_section  # noqa: E402
-from init import require_text  # noqa: E402
+from agent.core.tools.app_tools import APP_TOOLS  # noqa: E402
+from agent.init import get_agent, get_client, parse_env_line, require_section  # noqa: E402
+from agent.init import require_text  # noqa: E402
 
 
 def test_parse_env_line_reads_key_value():

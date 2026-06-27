@@ -4,11 +4,11 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Optional
 from pydantic import BaseModel
 
-from agent.memory.session import Session, BaseSessionManager
-from agent.types import Event, ToolCall
+from agent.core.memory.session import Session, BaseSessionManager
+from agent.core.model.types import Event, ToolCall
 
 if TYPE_CHECKING:
-      from agent.memory.long_term import TaskMemoryManager
+      from agent.core.memory.long_term import TaskMemoryManager
 
 @dataclass
 class ExecContext:

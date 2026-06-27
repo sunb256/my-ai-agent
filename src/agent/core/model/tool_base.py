@@ -2,11 +2,11 @@ import inspect
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Callable
 
-from agent.helper_schema import func_input_schema, format_tool_def
-from agent.context import ExecContext
+from agent.core.helpers.schema import func_input_schema, format_tool_def
+from agent.core.model.context import ExecContext
 
 if TYPE_CHECKING:
-      from agent.llm import Request
+      from agent.core.model.llm_message import Request
 
 class BaseTool(ABC):
 
