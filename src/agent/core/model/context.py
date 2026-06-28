@@ -63,3 +63,26 @@ class ToolConfirm(BaseModel):
     approved: bool
     modified_args: dict | None = None
     
+
+@dataclass(frozen=True)
+class AgentStreamTextStart:
+    pass
+
+@dataclass(frozen=True)
+class AgentStreamTextDelta:
+    delta: str
+
+@dataclass(frozen=True)
+class AgentStreamTextEnd:
+    pass
+
+@dataclass(frozen=True)
+class AgentStreamResult:
+    result: AgentResult
+
+AgentStreamEvent = (
+    AgentStreamTextStart
+    | AgentStreamTextDelta
+    | AgentStreamTextEnd
+    | AgentStreamResult
+)

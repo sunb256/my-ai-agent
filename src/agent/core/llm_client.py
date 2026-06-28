@@ -4,6 +4,11 @@ from typing import Any, Type
 
 from pydantic import BaseModel
 
+from collections.abc import AsyncIterator
+from json import JSONDecodeError
+
+from .model.llm_message import LLMResponseDone, LLMStreamEvent, LLMTextDelta
+
 from .helpers.schema import remove_code_fence
 from .model.llm_message import Request, Response
 from .model.types import Message, ToolCall, ToolResult
@@ -98,74 +103,117 @@ class MessageHelper:
         }
 
 class Client:
+
     def __init__(self, model: str, **config: Any):
         self.model = model
         self.config = config
         
+    # async def call_llm(self, req: Request) -> Response:
+    #     try:
+    #         # msgs = self._build_msgs(req)
+    #         msgs = MessageHelper.build_msgs(req)
+    #         tools = [tool.tool_def for tool in req.tools]
+
+    #         kwargs = {
+    #             "model": self.model,
+    #             "messages": msgs,
+    #             "tools": tools,
+    #             **self.config,
+    #         }
+
+    #         if req.tool_choice is not None:
+    #             kwargs["tool_choice"] = req.tool_choice
+
+    #         # call litellm api
+    #         response = await acompletion(**kwargs)
+    #         return self._parse_response(response)
+
+    #     except Exception as error:
+    #         return Response(err_msg=str(error))
+
     async def call_llm(self, req: Request) -> Response:
         try:
-            # msgs = self._build_msgs(req)
-            msgs = MessageHelper.build_msgs(req)
-            tools = [tool.tool_def for tool in req.tools]
-
-            kwargs = {
-                "model": self.model,
-                "messages": msgs,
-                "tools": tools,
-                **self.config,
-            }
-
-            if req.tool_choice is not None:
-                kwargs["tool_choice"] = req.tool_choice
-
-            # call litellm api
+            kwargs = self._build_kwargs(req)
             response = await acompletion(**kwargs)
             return self._parse_response(response)
 
         except Exception as error:
             return Response(err_msg=str(error))
 
-    # def _build_msgs(self, req: Request) -> list[dict[str, Any]]:
-    #     msgs = req.get_system_prompt_msgs()
+    async def stream_llm(self, req: Request) -> AsyncIterator[LLMStreamEvent]:
+        try:
+            kwargs = self._build_kwargs(req)
+            kwargs["stream"] = True
 
-    #     for item in req.contents:
-    #         if isinstance(item, Message):
-    #             msgs.append(self._message(item))
-    #         elif isinstance(item, ToolCall):
-    #             msgs.append(self._tool_call(item))
-    #         elif isinstance(item, ToolResult):
-    #             msgs.append(self._tool_result(item))
+            stream = await acompletion(**kwargs)
 
-    #     return msgs
+            text_parts: list[str] = []
+            tool_buffs: dict[int, dict[str, str]] = {}
 
-    # def _message(self, item: Message) -> dict[str, Any]:
-    #     return {
-    #               "role": item.role, 
-    #               "content": item.content
-    #             }
+            async for chunk in stream:
+                choice = chunk.choices[0]
+                delta = choice.delta
 
-    # def _tool_call(self, item: ToolCall) -> dict[str, Any]:
-    #     return {
-    #               "role": "assistant",
-    #               "content": None,
-    #               "tool_calls": [
-    #                   {
-    #                       "id": item.tool_call_id,
-    #                       "type": "function",
-    #                       "function": {
-    #                           "name": item.name,
-    #                           "arguments": json.dumps(item.args),
-    #                       },
-    #                   }
-    #               ],
-    #             }
+                content = getattr(delta, "content", None)
+                if content:
+                    text_parts.append(content)
+                    yield LLMTextDelta(delta=content)
+                
+                for item in getattr(delta, "tool_calls", None) or []:
+                    idx = getattr(item, "index", 0) or 0
+                    buf = tool_buffs.setdefault(idx, {"id": "", "name": "", "arguments": ""})
 
-    # def _tool_result(self, item: ToolResult) -> dict[str, Any]:
-    #     return {
-    #               "role": "tool",
-    #               "content": str(item.content[0]) if item.content else "",
-    #               "tool_call_id": item.tool_call_id,
-    #             }
+                    if getattr(item, "id", None):
+                        buf["id"] = item.id
+                    
+                    fn = getattr(item, "function", None)
+                    if fn is not None:
+                        if getattr(fn, "name", None):
+                            buf["name"] += fn.name
+                        
+                        if getattr(fn, "arguments", None):
+                            buf["arguments"] += fn.arguments
+            
+            contents: list[Message | ToolCall | ToolResult] = []
+
+            full = "".join(text_parts)
+            if full:
+                contents.append(Message(role="assistant", content=full))
+            
+            for idx in sorted(tool_buffs):
+                buf = tool_buffs[idx]
+                if not buf["name"]:
+                    continue
+            
+                try:
+                    args = json.loads(buf["arguments"] or "{}")
+                except JSONDecodeError:
+                    args = {}
+                
+                tc = ToolCall(tool_call_id=buf["id"]or f"call_{idx}", name=buf["name"], args=args)
+                contents.append(tc)
+            
+            yield LLMResponseDone(response=Response(content=contents))
+        
+        except Exception as error:
+            yield LLMResponseDone(response=Response(err_msg=str(error)))
+
+    def _build_kwargs(self, req: Request) -> dict[str, Any]:
+        msgs = MessageHelper.build_msgs(req)
+        tools = [tool.tool_def for tool in req.tools]
+
+        kwargs = {
+            "model": self.model,
+            "messages": msgs,
+            "tools": tools,
+            **self.config,
+        }
+
+        if req.tool_choice is not None:
+            kwargs["tool_choice"] = req.tool_choice
+        
+        return kwargs
+
 
     def _parse_response(self, res: Any) -> Response:
         """
