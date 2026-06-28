@@ -107,81 +107,6 @@ class Agent:
     # - Core loop
     # ---------------
 
-    # async def run(self, 
-    #               prompt, 
-    #               ctx: ExecContext | None = None, 
-    #               session_id: str | None = None,
-    #               confirm: list[ToolConfirm] | None = None,
-    #               verbose: bool = False) -> AgentResult:
-
-    #     session = None
-    #     if session_id and self.session_manager:
-    #         session = await self.session_manager.get_or_create(session_id)
-
-    #     if ctx is None:
-    #         ctx = ExecContext(session=session, session_manager=self.session_manager, memory_manager=self.memory_manager)
-
-    #         if session:
-    #             ctx.events = list(session.events)
-    #             ctx.state = dict(session.state)
-        
-    #     elif ctx.memory_manager is None:
-    #         ctx.memory_manager = self.memory_manager
-
-    #     # hitl
-    #     if confirm:
-    #         await self._process_confirm(ctx, confirm)
-        
-    #     if prompt:
-    #         user_event = Event.new_msg(ctx.exec_id, USER, prompt)
-    #         ctx.add_event(user_event)
-
-    #     if self.is_code_exec and \
-    #        ctx.code_env is None:
-    #         await self._setup_code_env(ctx)
-
-    #     try:
-    #         while ctx.is_continue(self.max_step):
-
-    #             result = await self.step(ctx, verbose=verbose)
-
-    #             # hitl
-    #             if result and result.status == "pending":
-    #                 if session and self.session_manager:
-    #                     session.events = list(ctx.events)
-    #                     session.state = dict(ctx.state)
-    #                     await self.session_manager.save(session)
-    #                 return result
-
-    #             event = ctx.last_event
-    #             if event is None:
-    #                 continue
-
-    #             if self._is_final_response(event):
-    #                 ctx.final_result = self._get_final_result(event)
-
-    #         # save memory
-    #         if self.memory_manager:
-    #             try:
-    #                 await self.memory_manager.save(ctx)
-    #             except Exception as e:
-    #                 logger.warning(f"failed to save memory {e}")
-
-    #         # save session
-    #         if session and self.session_manager:
-    #             session.events = list(ctx.events)
-    #             session.state = dict(ctx.state)
-    #             await self.session_manager.save(session)
-
-    #         return AgentResult(output=ctx.final_result, ctx=ctx)
-
-    #     finally:
-    #         if ctx.code_env is not None:
-    #             result = ctx.code_env.kill()
-    #             if inspect.isawaitable(result):
-    #                 await result
-
-
     async def run(
         self,
         prompt,
@@ -319,41 +244,7 @@ class Agent:
                 result = ctx.code_env.kill()
                 if inspect.isawaitable(result):
                     await result
-
-
-    # async def step(self, ctx: ExecContext, verbose: bool = False) -> AgentResult | None:
-        
-    #     req = await self._get_request(ctx)
-
-    #     for callback in self.before_llm_cb:
-    #         cb_result = callback(ctx, req)
-    #         if inspect.isawaitable(cb_result):
-    #             cb_result = await cb_result
-
-    #         if isinstance(cb_result, Response):
-    #             res = cb_result
-    #             break
-    #     else:
-    #         res = await self.think(req)
-
-    #     if res.err_msg:
-    #         raise RuntimeError(res.err_msg)
-
-    #     if verbose:
-    #         self._log_response(res)
-        
-    #     res_event = Event.new(ctx.exec_id, self.role, res.content)
-    #     ctx.add_event(res_event)
-
-    #     tool_calls = [c for c in res.content if isinstance(c, ToolCall)]
-    #     if tool_calls:
-    #         result = await self.act(ctx, tool_calls)
-    #         if result and result.status == "pending":
-    #             return result
-        
-    #     ctx.increment()
-    #     return None
-
+    
     async def step(self, ctx: ExecContext, verbose: bool = False) -> AgentResult | None:
 
         async for event in self._step_loop(ctx, stream_llm=False, verbose=verbose):

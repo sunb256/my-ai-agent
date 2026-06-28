@@ -108,29 +108,6 @@ class Client:
         self.model = model
         self.config = config
         
-    # async def call_llm(self, req: Request) -> Response:
-    #     try:
-    #         # msgs = self._build_msgs(req)
-    #         msgs = MessageHelper.build_msgs(req)
-    #         tools = [tool.tool_def for tool in req.tools]
-
-    #         kwargs = {
-    #             "model": self.model,
-    #             "messages": msgs,
-    #             "tools": tools,
-    #             **self.config,
-    #         }
-
-    #         if req.tool_choice is not None:
-    #             kwargs["tool_choice"] = req.tool_choice
-
-    #         # call litellm api
-    #         response = await acompletion(**kwargs)
-    #         return self._parse_response(response)
-
-    #     except Exception as error:
-    #         return Response(err_msg=str(error))
-
     async def call_llm(self, req: Request) -> Response:
         try:
             kwargs = self._build_kwargs(req)

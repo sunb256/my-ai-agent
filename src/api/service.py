@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import json
 import uuid
 from collections.abc import AsyncIterator
@@ -19,107 +20,47 @@ from agent.core.model.context import (
     ToolConfirm,
 )
 
+@dataclass
+class StreamState:
+    mid: str | None = None
+    streamed_text: bool = False
+    finished: bool = False
+
+
 class AgentApiService:
 
     def __init__(self, agent: Agent):
         self._agent = agent
-    
-    # async def stream_agent(self, input_: RunAgentInput, accept: str | None) -> AsyncIterator[str]:
-        
-    #     enc = EventEncoder(accept=accept)
-    #     ev = EventFactory(input_)
-
-    #     yield enc.encode(ev.run_started())
-
-    #     try:
-    #         ret = await self._run_agent(input_)
-
-    #         async for chunk in self._to_events(enc=enc, ev=ev, ret=ret):
-    #             yield chunk
-
-    #     except Exception as error:
-    #         # yield enc.encode(ev.run_error(str(error), "agent_error"))
-    #         async for chunk in self._text_events(enc=enc, ev=ev, text=f"error occurred: {error}"):
-    #             yield chunk
-
-    #         yield enc.encode(ev.run_success())
-    #         return
-
+ 
     async def stream_agent(self, input_: RunAgentInput, accept: str | None) -> AsyncIterator[str]:
 
         enc = EventEncoder(accept=accept)
         ev = EventFactory(input_)
+        state = StreamState()
 
         yield enc.encode(ev.run_started())
 
-        mid: str | None = None
-        s_text = False   # streamed_text
-
         try:
-            async for event in self._stream_agent_events(input_):
-
-                # start
-                if isinstance(event, AgentStreamTextStart):
-                    if mid is None:
-                        mid = f"msg_{uuid.uuid4().hex}"
-                        yield enc.encode(ev.text_start(mid))
-                    continue
-                
-                # content
-                if isinstance(event, AgentStreamTextDelta):
-                    if mid is None:
-                        mid = f"msg_{uuid.uuid4().hex}"
-                        yield enc.encode(ev.text_start(mid))
-
-                    s_text = True
-                    yield enc.encode(ev.text_content(mid, event.delta))
-                    continue
-
-                # end
-                if isinstance(event, AgentStreamTextEnd):
-                    if mid is not None:
-                        yield enc.encode(ev.text_end(mid))
-                        mid = None
-                    continue
-
-                # result
-                if isinstance(event, AgentStreamResult):
-                    if mid is not None:
-                        yield enc.encode(ev.text_end(mid))
-                        mid = None
-
-                    ret = event.result
-
-                    if ret.status == "pending":
-                        interrupts = self._pending(
-                            pending_tc=ret.pending_tc,
-                            session_id=ev.thread_id,
-                            agent_run_id=ret.ctx.exec_id,
-                        )
-                        yield enc.encode(ev.run_interrupt(interrupts))
-                        return
-
-                    if s_text:
-                        yield enc.encode(ev.run_success())
-                        return
-
-                    async for chunk in self._to_events(enc=enc, ev=ev, ret=ret):
-                        yield chunk
-                    return
-
-            raise RuntimeError("Agent stream finished without result.")
-
-        except Exception as error:
-            if mid is not None:
-                yield enc.encode(ev.text_end(mid))
-
-            async for chunk in self._text_events(enc=enc, ev=ev, text=f"error occurred: {error}"):
+            async for chunk in self._emit_stream(input_=input_, enc=enc, ev=ev, state=state):
                 yield chunk
 
-            yield enc.encode(ev.run_success())
+        except Exception as error:
+            async for chunk in self._emit_error(enc=enc, ev=ev, state=state, error=error):
+                yield chunk
 
+    async def _emit_stream(self, input_: RunAgentInput, enc: EventEncoder, ev: EventFactory, state: StreamState) -> AsyncIterator[str]:
+        
+        async for event in self._get_stream_events(input_):
 
-    async def _stream_agent_events(self, input_: RunAgentInput):
+            async for chunk in self._emit_event(event=event, enc=enc, ev=ev, state=state):
+                yield chunk
+
+            if state.finished:
+                return
+
+        raise RuntimeError("Agent stream finished without result.")
+
+    async def _get_stream_events(self, input_: RunAgentInput):
         sid = input_.thread_id
 
         if input_.resume:
@@ -137,28 +78,6 @@ class AgentApiService:
         async for event in self._agent.stream(prompt=prompt, session_id=sid):
             yield event
 
-
-    async def _run_agent(self, input_: RunAgentInput) -> AgentResult:
-
-        if input_.resume:
-            confirms = self._resume(input_.resume)
-
-            return await self._agent.run(
-                prompt="",
-                session_id=input_.thread_id,
-                confirm=confirms
-            )
-    
-        prompt = self._last_user_text(input_)
-        if not prompt:
-            raise ValueError("No user message found.")
-        
-        return await self._agent.run(
-            prompt=prompt,
-            session_id=input_.thread_id
-        )
-    
-
     def _last_user_text(self, input_: RunAgentInput) -> str:
         for message in reversed(input_.messages):
             if getattr(message, "role", None) != "user":
@@ -167,7 +86,6 @@ class AgentApiService:
             return self._content_to_text(getattr(message, "content", ""))
 
         return ""
-
 
     def _content_to_text(self, content: Any) -> str:
         if isinstance(content, str):
@@ -188,20 +106,90 @@ class AgentApiService:
 
         return "\n".join(texts).strip()
 
-
-    async def _to_events(self, 
-                         enc: EventEncoder,
-                         ev: EventFactory,
-                         ret: AgentResult) -> AsyncIterator[str]:
+    async def _emit_event(self, event, enc: EventEncoder, ev: EventFactory, state: StreamState) -> AsyncIterator[str]:
         
-        if ret.status == "pending":
-            interrupt = self._pending(
-                  pending_tc=ret.pending_tc,
-                  session_id=ev.thread_id,
-                  agent_run_id=ret.ctx.exec_id,
-            )
-            yield enc.encode(ev.run_interrupt(interrupt))
+        # start
+        if isinstance(event, AgentStreamTextStart):
+            if state.mid is None:
+                state.mid = f"msg_{uuid.uuid4().hex}"
+                yield enc.encode(ev.text_start(state.mid))
             return
+
+        # delta
+        if isinstance(event, AgentStreamTextDelta):
+            if state.mid is None:
+                state.mid = f"msg_{uuid.uuid4().hex}"
+                yield enc.encode(ev.text_start(state.mid))
+
+            state.streamed_text = True
+            yield enc.encode(ev.text_content(state.mid, event.delta))
+            return
+
+        # end
+        if isinstance(event, AgentStreamTextEnd):
+            async for chunk in self._close_text(enc, ev, state):
+                yield chunk
+            return
+
+        # result
+        if isinstance(event, AgentStreamResult):
+            async for chunk in self._emit_result(ret=event.result, enc=enc, ev=ev, state=state):
+                yield chunk
+            return
+
+        raise TypeError(f"Unsupported agent stream event: {type(event).__name__}")
+
+
+    async def _close_text(self, enc: EventEncoder, ev: EventFactory, state: StreamState) -> AsyncIterator[str]:
+        
+        if state.mid is None:
+            return
+
+        yield enc.encode(ev.text_end(state.mid))
+        state.mid = None
+
+    async def _emit_result(self, ret: AgentResult, enc: EventEncoder, ev: EventFactory, state: StreamState) -> AsyncIterator[str]:
+        
+        async for chunk in self._close_text(enc, ev, state):
+            yield chunk
+
+        if ret.status == "pending":
+            interrupts = self._pending(
+                pending_tc=ret.pending_tc,
+                session_id=ev.thread_id,
+                agent_run_id=ret.ctx.exec_id,
+            )
+
+            yield enc.encode(ev.run_interrupt(interrupts))
+            state.finished = True
+            return
+
+        if state.streamed_text:
+            yield enc.encode(ev.run_success())
+            state.finished = True
+            return
+
+        async for chunk in self._emit_non_stream_result(enc=enc, ev=ev, ret=ret):
+            yield chunk
+
+        state.finished = True
+
+
+    async def _emit_error(self, enc: EventEncoder, ev: EventFactory, state: StreamState, error: Exception) -> AsyncIterator[str]:
+        
+        async for chunk in self._close_text(enc, ev, state):
+            yield chunk
+
+        async for chunk in self._text_events(enc=enc, ev=ev, text=f"error occurred: {error}"):
+            yield chunk
+
+        yield enc.encode(ev.run_success())
+
+
+    async def _emit_non_stream_result(self, 
+                                      enc: EventEncoder,
+                                      ev: EventFactory,
+                                      ret: AgentResult) -> AsyncIterator[str]:
         
         if ret.output is not None:
             text = self._output_text(ret.output)

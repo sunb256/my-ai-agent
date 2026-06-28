@@ -1,5 +1,12 @@
 "use client";
 
+// --------------------
+// - my custom component
+// --------------------
+import { AgUiInterruptCard } from "@/components/AgUiInterruptCard";
+
+// --------------------
+
 import {
   ComposerAddAttachment,
   ComposerAttachments,
@@ -413,6 +420,9 @@ const AssistantMessage: FC = () => {
             }
           }}
         </MessagePrimitive.GroupedParts>
+        
+        {/* add custom components */}
+        <AgUiInterruptCard />  
         <MessageError />
       </div>
 
