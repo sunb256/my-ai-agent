@@ -14,7 +14,7 @@ from .helpers.const import STR_SUCCESS, STR_ERROR, USER
 
 from .memory.session import BaseSessionManager
 from .code_exec import exec_python, bash_tool, upload_file
-from .skills import find_skill, make_skills_prompt
+from .skills import find_skill, make_skills_prompt, make_requested_skills_prompt, select_requested_skills
 from .helpers.skill import upload_skills_to_sandbox
 from .helpers.agent import (
       get_final_by_output_tool,
@@ -475,10 +475,19 @@ class Agent:
         
         if self.skills_path:
             try:
-                skill = find_skill(self.skills_path)
-                skills_prompt = make_skills_prompt(skill)
+                skills = find_skill(self.skills_path)
+
+                skills_prompt = make_skills_prompt(skills)
                 if skills_prompt:
                     system_prompt.append(skills_prompt)
+
+                user_text = self._last_user_text(histories)
+                requested_skills = select_requested_skills(skills, user_text)
+
+                skills_prompt = make_requested_skills_prompt(requested_skills)
+                if skills_prompt:
+                    system_prompt.append(skills_prompt)
+
             except Exception:
                 pass
 
@@ -504,7 +513,13 @@ class Agent:
             await tool_obj.process_llm_request(ctx, req)
 
         return req
-        
+
+    def _last_user_text(self, histories: list[Message | ToolCall | ToolResult]) -> str:
+        for item in reversed(histories):
+            if isinstance(item, Message) and item.role == USER:
+                return item.content
+
+        return ""
     
     def _is_final_response(self, event: Event) -> bool:
         if self.output_tool_name:
