@@ -1,164 +1,121 @@
 import json
-from typing import Any, AsyncIterator
+import uuid
+from collections.abc import AsyncIterator
+from typing import Any
+
+from ag_ui.core import Interrupt, RunAgentInput
+from ag_ui.encoder import EventEncoder
 
 from agent.core.agent import Agent
-from agent.core.model.context import ToolConfirm
+from agent.core.model.context import AgentResult, PendingToolCall, ToolConfirm
+from api.event_factory import EventFactory
 
-from .schemas import ChatRunRequest, ResumeRunRequest, ToolConfirmPayload
-# from .stream_events import sse
-from .stream_events import (
-    ds_error,
-    ds_finish_message,
-    ds_start_tool_call,
-    ds_text_delta,
-    ds_tool_call_args_delta,
-)
 
 class AgentApiService:
 
     def __init__(self, agent: Agent):
         self._agent = agent
+    
+    async def stream_agent(
+            self,
+            input_: RunAgentInput,
+            accept: str | None,
+    ) -> AsyncIterator[str]:
+        
+        enc = EventEncoder(accept=accept)
+        ev = EventFactory(input_)
 
-    async def stream_chat(self, body: ChatRunRequest, session_id: str) -> AsyncIterator[str]:
-        run_id = ""
+        yield enc.encode(ev.run_started())
 
         try:
-            prompt = (body.prompt or "").strip()
-            if not prompt:
-                prompt = self._extract_prompt(body.messages)
+            ret = await self._run_agent(input_)
 
-            if not prompt:
-                yield ds_error("No user text found in messages.")
-                yield ds_finish_message("error")
-                return
-
-            result = await self._agent.run(
-                prompt=prompt,
-                session_id=session_id,
-                verbose=body.verbose,
-            )
-            run_id = result.ctx.exec_id
-
-            async for event in self._agent_result(session_id, result, run_id):
-                yield event
+            async for chunk in self._to_events(enc=enc, ev=ev, ret=ret):
+                yield chunk
 
         except Exception as error:
-            yield ds_error(str(error))
-            yield ds_finish_message("error")
+            # yield enc.encode(ev.run_error(str(error), "agent_error"))
+            async for chunk in self._text_events(enc=enc, ev=ev, text=f"error occurred: {error}"):
+                yield chunk
+
+            yield enc.encode(ev.run_success())
+            return
+
+
+    async def _run_agent(self, input_: RunAgentInput) -> AgentResult:
+        if input_.resume:
+            confirms = self._resume(input_.resume)
+            return await self._agent.run(
+                prompt="",
+                session_id=input_.thread_id,
+                confirm=confirms
+            )
+    
+        prompt = self._last_user_text(input_)
+        if not prompt:
+            raise ValueError("No user message found.")
+        
+        return await self._agent.run(
+            prompt=prompt,
+            session_id=input_.thread_id
+        )
     
 
-    async def stream_resume(self, session_id: str, body: ResumeRunRequest) -> AsyncIterator[str]:
-
-        try:
-            await self._get_pending_run_id(session_id)
-            confirms = [self._to_tool_confirm(item) for item in body.confirm]
-
-            result = await self._agent.run(
-                prompt="",
-                session_id=session_id,
-                confirm=confirms,
-                verbose=body.verbose,
-            )
-
-            next_run_id = result.ctx.exec_id
-
-            async for event in self._agent_result(session_id, result, next_run_id):
-                yield event
-
-        except Exception as error:
-            yield ds_error(str(error))
-            yield ds_finish_message("error")
-        
-        
-    async def _agent_result(self, session_id: str, result: Any, error_run_id: str) -> AsyncIterator[str]:
-        run_id = result.ctx.exec_id
-
-        if result.status == "pending":
-            await self._save_pending_run_id(session_id, run_id)
-
-            pending = self._pending_payload(result.pending_tc)
-            tool_call_id = f"human_approval_{run_id}"
-
-            args = {
-                "session_id": session_id,
-                "run_id": run_id,
-                "pending": pending,
-            }
-
-            yield ds_start_tool_call(tool_call_id, "human_approval")
-            yield ds_tool_call_args_delta(
-                tool_call_id,
-                json.dumps(args, ensure_ascii=False),
-            )
-
-            yield ds_finish_message("tool-calls")
-            return
-
-        await self._clear_pending_run_id(session_id)
-
-        if result.output is not None:
-            text = self._output_text(result.output)
-            if text:
-                yield ds_text_delta(text)
-            yield ds_finish_message("stop")
-            return
-
-        _ = error_run_id
-        yield ds_error("agent_finished_without_output")
-        yield ds_finish_message("error")
-        
-        
-    def _extract_prompt(self, messages: list[dict[str, Any]]) -> str:
-        # usebataStreamRuntime からなる messages から最後の user_text を抽出
-        for message in reversed(messages):
-
-            if not isinstance(message, dict):
+    def _last_user_text(self, input_: RunAgentInput) -> str:
+        for message in reversed(input_.messages):
+            if getattr(message, "role", None) != "user":
                 continue
 
-            if message.get("role") != "user":
-                continue
+            return self._content_to_text(getattr(message, "content", ""))
 
-            content = message.get("content")
-
-            if isinstance(content, str):
-                text = content.strip()
-                if text:
-                    return text
-
-            if isinstance(content, list):
-                parts: list[str] = []
-
-                for part in content:
-                    if not isinstance(part, dict):
-                        continue
-                    if part.get("type") == "text" and isinstance(part.get("text"), str):
-                        parts.append(part["text"])
-                    elif isinstance(part.get("text"), str):
-                        parts.append(part["text"])
-
-                joined = "".join(parts).strip()
-                if joined:
-                    return joined
-        
         return ""
+
+
+    def _content_to_text(self, content: Any) -> str:
+        if isinstance(content, str):
+            return content.strip()
+
+        if not isinstance(content, list):
+            return ""
+
+        texts: list[str] = []
+
+        for part in content:
+            if getattr(part, "type", None) != "text":
+                continue
+
+            text = getattr(part, "text", "")
+            if isinstance(text, str):
+                texts.append(text)
+
+        return "\n".join(texts).strip()
+
+
+    async def _to_events(self, 
+                         enc: EventEncoder,
+                         ev: EventFactory,
+                         ret: AgentResult) -> AsyncIterator[str]:
         
-    def _to_tool_confirm(self, item: ToolConfirmPayload) -> ToolConfirm:
-        return ToolConfirm(tool_call_id=item.id, approved=item.approved, modified_args=item.modified_args)
-
-    def _pending_payload(self, pending_tc: list[Any]) -> list[dict[str, Any]]:
-        payload: list[dict[str, Any]] = []
-
-        for pending in pending_tc:
-            payload.append(
-                {
-                    "tool_call_id": pending.tool_call.tool_call_id,
-                    "name": pending.tool_call.name,
-                    "args": pending.tool_call.args,
-                    "confirm": pending.confirm,
-                }
+        if ret.status == "pending":
+            interrupt = self._pending(
+                  pending_tc=ret.pending_tc,
+                  session_id=ev.thread_id,
+                  agent_run_id=ret.ctx.exec_id,
             )
-        return payload
+            yield enc.encode(ev.run_interrupt(interrupt))
+            return
+        
+        if ret.output is not None:
+            text = self._output_text(ret.output)
 
+            async for chunk in self._text_events(enc=enc, ev=ev, text=text):
+                yield chunk
+            
+            yield enc.encode(ev.run_success())
+            return
+        
+        raise RuntimeError("Agent finished without output.")
+        
     def _output_text(self, output: Any) -> str:
         if isinstance(output, str):
             return output
@@ -168,46 +125,78 @@ class AgentApiService:
 
         return json.dumps(output, ensure_ascii=False, default=str)
 
-    async def _get_pending_run_id(self, session_id: str) -> str:
-        manager = self._agent.session_manager
-        if manager is None:
-            raise ValueError("Session manager is not configured.")
+    async def _text_events(self, enc: EventEncoder, ev: EventFactory, text: str) -> AsyncIterator[str]:
+        mid = f"msg_{uuid.uuid4().hex}"
 
-        session = await manager.get(session_id)
-        if session is None:
-            raise ValueError(r"Session not found: {session_id}")
+        yield enc.encode(ev.text_start(mid))
+        
+        for char in text:
+            yield enc.encode(ev.text_content(mid, char))
+        
+        yield enc.encode(ev.text_end(mid))
 
-        pending_run_id = session.state.get("pending_run_id")
-        if pending_run_id is None:
-            raise ValueError("Pending run id not found.")
+    def _pending(self, 
+                 pending_tc: list[PendingToolCall],
+                 session_id: str,
+                 agent_run_id: str) -> list[Interrupt]:
 
-        if not isinstance(pending_run_id, str) or not pending_run_id:
-            raise ValueError("Pending run id is invalid.")
+        interrupts: list[Interrupt] = []
 
-        return pending_run_id
+        for pending in pending_tc:
+            tool_call = pending.tool_call
 
+            interrupts.append(
+                Interrupt(
+                    id=self._interrupt_id(tool_call.tool_call_id),
+                    reason="confirmation",
+                    message=pending.confirm,
+                    tool_call_id=tool_call.tool_call_id,
+                    metadata={
+                        "tool_name": tool_call.name,
+                        "args": tool_call.args,
+                        "session_id": session_id,
+                        "agent_run_id": agent_run_id,
+                    },
+                )
+            )
+        
+        return interrupts
 
-    async def _save_pending_run_id(self, session_id: str, run_id: str) -> None:
-        manager = self._agent.session_manager
-        if manager is None:
-            return
+    def _interrupt_id(self, tool_call_id: str) -> str:
+        return f"interrupt_{tool_call_id}"
 
-        session = await manager.get(session_id)
-        if session is None:
-            return
+    def _resume(self, resume: list[Any]) -> list[ToolConfirm]:
+        confirms: list[ToolConfirm] = []
 
-        session.state["pending_run_id"] = run_id
-        await manager.save(session)
+        for entry in resume:
+            tool_call_id = self._tool_call_id_from_interrupt(entry.interrupt_id)
 
-    async def _clear_pending_run_id(self, session_id: str) -> None:
-        manager = self._agent.session_manager
-        if manager is None:
-            return
+            if entry.status == "cancelled":
+                confirms.append(
+                    ToolConfirm(
+                        tool_call_id=tool_call_id,
+                        approved=False,
+                    )
+                )
+                continue
 
-        session = await manager.get(session_id)
+            payload = entry.payload
+            if not isinstance(payload, dict):
+                payload = {}
 
-        if session is None:
-            return
+            approved = bool(payload.get("approved", True))
+            modified_args = payload.get("modified_args")
 
-        session.state.pop("pending_run_id", None)
-        await manager.save(session)
+            confirms.append(
+                ToolConfirm(
+                    tool_call_id=tool_call_id,
+                    approved=approved,
+                    modified_args=modified_args if isinstance(modified_args, dict) else None,
+                )
+            )
+
+        return confirms
+    
+    def _tool_call_id_from_interrupt(self, interrupt_id: str) -> str:
+        return interrupt_id.removeprefix("interrupt_")
+    

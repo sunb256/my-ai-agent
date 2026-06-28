@@ -1,32 +1,31 @@
-# React + TypeScript + Vite
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+# WEB UI
 
-Currently, two official plugins are available:
+## 確認方法
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+cd src/frontend/web
+npm run dev
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+# -> http://localhost:5173
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+
+## HITL確認
+
+```bash
+先にテストファイルを作ります。
+
+echo test > /tmp/agui-hitl-test.txt
+
+Web画面で送ります。
+
+delete_file ツールで /tmp/agui-hitl-test.txt を削除して
+
+期待する状態:
+
+- /agent のレスポンスに RUN_FINISHED + outcome.type: "interrupt" が出る
+- interrupts[0].reason が "confirmation"
+- metadata.tool_name が "delete_file"
+- まだ承認していないのでファイルは残る
+```

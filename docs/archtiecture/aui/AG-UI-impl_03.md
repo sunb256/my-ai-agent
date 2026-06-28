@@ -58,39 +58,3 @@ async def agent_endpoint(req: Request):
 
 これで frontend から送信したときに、まず固定文が表示される
 
-## Step 2: 既存 Agent と接続する
-
-固定文が出た後に、今の AgentApiService 相当を AG UI event に変換します。
-
-```
-AgentResult output
-  -> TEXT_MESSAGE_START
-  -> TEXT_MESSAGE_CONTENT
-  -> TEXT_MESSAGE_END
-  -> RUN_FINISHED
-
-AgentResult pending
-  -> TOOL_CALL_START / TOOL_CALL_ARGS / interrupt 系イベント
-  -> HITL UI
-  -> resume
-```
-
-HITL は少し慎重に設計した方がよいので、まずは 固定文の /agent が 
-frontend に表示されるか を確認するのが次の最短ステップです。
-
-今やること
-
-1. uv add ag-ui-protocol
-2. src/api/main.py に /agent の固定応答 endpoint を追加
-3. backend 起動
-
-uv run uvicorn api.main:app --reload
-
-4. frontend 起動
-
-cd src/frontend/web
-npm run dev
-
-5. assistant-ui から送信して、AG UI backend connected が表示されるか確認
-
-これが通れば、frontend と backend の AG UI 接続は成立しています。
