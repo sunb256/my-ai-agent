@@ -18,6 +18,10 @@ from agent.core.model.context import (
     AgentStreamTextStart,
     PendingToolCall,
     ToolConfirm,
+    AgentStreamToolCallArgs,
+    AgentStreamToolCallEnd,
+    AgentStreamToolCallResult,
+    AgentStreamToolCallStart,
 )
 
 @dataclass
@@ -108,14 +112,14 @@ class AgentApiService:
 
     async def _emit_event(self, event, enc: EventEncoder, ev: EventFactory, state: StreamState) -> AsyncIterator[str]:
         
-        # start
+        # text-start
         if isinstance(event, AgentStreamTextStart):
             if state.mid is None:
                 state.mid = f"msg_{uuid.uuid4().hex}"
                 yield enc.encode(ev.text_start(state.mid))
             return
 
-        # delta
+        # text-delta
         if isinstance(event, AgentStreamTextDelta):
             if state.mid is None:
                 state.mid = f"msg_{uuid.uuid4().hex}"
@@ -125,16 +129,45 @@ class AgentApiService:
             yield enc.encode(ev.text_content(state.mid, event.delta))
             return
 
-        # end
+        # text-end
         if isinstance(event, AgentStreamTextEnd):
             async for chunk in self._close_text(enc, ev, state):
                 yield chunk
             return
 
-        # result
+        # text-result
         if isinstance(event, AgentStreamResult):
             async for chunk in self._emit_result(ret=event.result, enc=enc, ev=ev, state=state):
                 yield chunk
+            return
+        
+        # toolcall-start
+        if isinstance(event, AgentStreamToolCallStart):
+            tool_call = event.tool_call
+            yield enc.encode(ev.tool_call_start(tool_call_id=tool_call.tool_call_id, tool_name=tool_call.name))
+            return
+
+        # toolcall-args
+        if isinstance(event, AgentStreamToolCallArgs):
+            tool_call = event.tool_call
+            yield enc.encode(ev.tool_call_args(tool_call_id=tool_call.tool_call_id, args=tool_call.args))
+            return
+
+        # toolcall-end
+        if isinstance(event, AgentStreamToolCallEnd):
+            yield enc.encode(ev.tool_call_end(event.tool_call.tool_call_id))
+            return
+        
+        # toolcall-result
+        if isinstance(event, AgentStreamToolCallResult):
+            tool_result = event.tool_result
+            yield enc.encode(
+                ev.tool_call_result(
+                    message_id=f"tool_{uuid.uuid4().hex}",
+                    tool_call_id=tool_result.tool_call_id,
+                    content=json.dumps(tool_result.content, ensure_ascii=False, default=str),
+                )
+            )
             return
 
         raise TypeError(f"Unsupported agent stream event: {type(event).__name__}")
@@ -180,10 +213,8 @@ class AgentApiService:
         async for chunk in self._close_text(enc, ev, state):
             yield chunk
 
-        async for chunk in self._text_events(enc=enc, ev=ev, text=f"error occurred: {error}"):
-            yield chunk
-
-        yield enc.encode(ev.run_success())
+        yield enc.encode(ev.run_error(message=str(error)))
+        state.finished = True
 
 
     async def _emit_non_stream_result(self, 
