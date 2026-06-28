@@ -47,5 +47,5 @@ uv run my-ai-agent "./src/agent/tests/samples/pop_area_2009.xlsx upload_file で
 ## skills
 
 ```bash
-uv run my-ai-agent "./src/agent/tests/samples/pop_area_2009.xlsx を upload_file でアップロードして、data-file-analysis skill を使い、シート構造を確認してから人口密度が高い国TOP10をJSONだけで答えて"
+uv run my-ai-agent "./src/agent/tests/samples/pop_area_2009.xlsx を upload_file でアップロードして、data-file-analysis skills を使い、シート構造を確認してから人口密度が高い国TOP10をJSONだけで答えて"
 ```

@@ -84,21 +84,68 @@ def make_skills_prompt(skills: list[SkillInfo], sandbox_path: str="/tmp/skills")
         return ""
     
     lines = [
-        "## Available Skills",
-        "The following skills are available in the sandbox environment",
-        ""
-    ]
+          "## Available Skills",
+          "The following skills are available in the sandbox environment.",
+          "",
+          "When the user asks to use a specific skill, you MUST read that skill's SKILL.md before using it.",
+          "Use bash_tool or exec_python to inspect the SKILL.md file in the sandbox.",
+          "After reading SKILL.md, follow its instructions exactly.",
+          "",
+      ]
 
     for skill in skills:
         lines.append(f"### {skill.name}")
         lines.append(f"- Description: {skill.desc}")
         lines.append(f"- Path: {sandbox_path}/{skill.name}/")
         lines.append(f"- Read the SKILL.md for usage instruction: {sandbox_path}/{skill.name}/SKILL.md")
-        lines.append(f"")
+        lines.append(
+            f"- If the user mentions `{skill.name}`, first read "
+            f"`{sandbox_path}/{skill.name}/SKILL.md` before doing the task."
+        )
+        lines.append("")
 
     lines.append(
-        "You can import and use these skills in your Python code."
-        "Read the SKILL.md file first to understand how to use each skill."
+        "Do not assume how a skill works from its name alone. "
+        "Always read the matching SKILL.md first when a skill is requested."
     )
 
     return "\n".join(lines)
+
+
+def select_requested_skills(skills: list[SkillInfo], text: str) -> list[SkillInfo]:
+    text_lower = text.lower()
+    selected: list[SkillInfo] = []
+
+    for skill in skills:
+        name = skill.name.lower()
+        pattern = rf"(?<![a-zA-Z0-9_-]){re.escape(name)}(?![a-zA-Z0-9_-])"
+
+        if re.search(pattern, text_lower):
+            selected.append(skill)
+
+    return selected
+
+def make_requested_skills_prompt(skills: list[SkillInfo], sandbox_path: str = "/tmp/skills") -> str:
+    
+      if not skills:
+          return ""
+
+      lines = [
+          "## Requested Skill Instructions",
+          "The user explicitly requested the following skills.",
+          "Use these instructions directly. The same files are also available in the sandbox.",
+          "",
+      ]
+
+      for skill in skills:
+          skill_md = skill.path / "SKILL.md"
+          content = skill_md.read_text(encoding="utf-8")
+
+          lines.append(f"### {skill.name}")
+          lines.append(f"- Sandbox path: {sandbox_path}/{skill.name}/")
+          lines.append(f"- Instruction file: {sandbox_path}/{skill.name}/SKILL.md")
+          lines.append("")
+          lines.append(content.strip())
+          lines.append("")
+
+      return "\n".join(lines)
