@@ -9,6 +9,7 @@ from agent.core.callbacks import search_compress
 from agent.core.tools.app_tools import APP_TOOLS
 from agent.core.llm_client import Client
 from agent.core.memory.context_optimizer import ContextOptimizer
+from agent.core.memory.session import BaseSessionManager
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -97,7 +98,12 @@ def require_api_key() -> str:
     raise ValueError(f"Set {API_KEY_NAME} in .env or your shell environment.")
 
 
-def get_agent(config: dict[str, Any], client: "Client", max_steps: int | None) -> "Agent":
+def get_agent(
+    config: dict[str, Any],
+    client: "Client",
+    max_steps: int | None,
+    session_manager: BaseSessionManager | None = None,
+) -> "Agent":
 
     agent = require_section(config, "agent")
     name = str(agent.get("name", "sample-agent"))
@@ -121,6 +127,7 @@ def get_agent(config: dict[str, Any], client: "Client", max_steps: int | None) -
         is_code_exec=is_code_exec,
         code_exec_image=code_exec_image,
         skills_path=skills_path,
+        session_manager=session_manager,
         before_tool_cb=before_tool_cb,
         after_tool_cb=after_tool_cb,
         before_llm_cb=before_llm_cb,
