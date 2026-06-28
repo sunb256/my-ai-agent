@@ -49,52 +49,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def _get_service() -> AgentApiService:
+
+def _get_stream_agent(req: Request, input_: RunAgentInput) -> AgentApiService:
     if state.service is None:
         raise HTTPException(status_code=503, detail="Service not initialized.")
 
-    return state.service
+    accept = req.headers.get("accept")
+    agent = state.service.stream_agent(input_=input_, accept=accept)
+    return agent
 
 @app.get("/healthz")
 async def healthz() -> dict[str, bool]:
     return {"ok": True}
     
-
-# simple impl
-# @app.post("/agent")
-# async def agent_endpoint(req: Request):
-#     body = await req.json()
-#     input_ = RunAgentInput.model_validate(body)
-
-#     enc = EventEncoder(accept=req.headers.get("accept"))
-
-#     async def event_stream():
-#         tid = input_.thread_id
-#         rid = input_.run_id
-#         mid = "msg_test" 
-
-#         yield enc.encode(RunStartedEvent(type=EventType.RUN_STARTED, thread_id=tid, run_id=rid))
-#         yield enc.encode(TextMessageStartEvent(type=EventType.TEXT_MESSAGE_START, message_id=mid, role="assistant"))
-
-#         for char in "AG UI backend connected":
-#             yield enc.encode(TextMessageContentEvent(type=EventType.TEXT_MESSAGE_CONTENT, message_id=mid, delta=char))
-
-#         yield enc.encode(TextMessageEndEvent(type=EventType.TEXT_MESSAGE_END, message_id=mid))
-#         yield enc.encode(RunFinishedEvent(type=EventType.RUN_FINISHED, thread_id=tid, run_id=rid))
-    
-#     return StreamingResponse(event_stream(), media_type="text/event-stream")
-
-
 @app.post("/agent")
 async def agent_endpoint(req: Request):
+
     body = await req.json()
     input_ = RunAgentInput.model_validate(body)
+    stream_agent = _get_stream_agent(req, input_)
 
     return StreamingResponse(
-        _get_service().stream_agent(
-            input_=input_,
-            accept=req.headers.get("accept")
-        ),
+        stream_agent,
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
