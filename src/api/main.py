@@ -1,84 +1,104 @@
-import json
-from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from ag_ui.core import RunAgentInput
 
-from agent.core.model.context import ToolConfirm
+from agent.core.memory.session import InMemorySessionManager
 from agent.init import DEFAULT_CONFIG, get_agent, get_client, load_config, load_env
 
+from .service import AgentApiService
 
-class ChatRequest(BaseModel):
-    prompt: str
-    run_id: str | None = None
-    config_path: str | None = None
-    max_steps: int | None = None
-    verbose: bool = False
-    confirms: list[ToolConfirm] | None = None
+@dataclass
+class State:
+    service: AgentApiService | None = None
 
+state = State()
 
-app = FastAPI(title="my-ai-agent API")
-_PENDING_CONTEXTS: dict[str, Any] = {}
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    load_env()
+    config = load_config(Path(DEFAULT_CONFIG))
+    client = get_client(config)
+    session_manager = InMemorySessionManager()
 
-
-@app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
-
-
-@app.post("/chat/stream")
-async def chat_stream(request: ChatRequest) -> StreamingResponse:
-    return StreamingResponse(
-        _run_agent_stream(request),
-        media_type="application/x-ndjson",
+    agent = get_agent(
+        config=config,
+        client=client,
+        max_steps=None,
+        session_manager=session_manager,
     )
 
+    state.service = AgentApiService(agent)
 
-async def _run_agent_stream(request: ChatRequest) -> AsyncIterator[str]:
     try:
-        yield _jsonl({"type": "start"})
+        yield
+    finally:
+        state.service = None
+    
+app = FastAPI(title="ai-agent-api", version="0.1.0", lifespan=lifespan)
 
-        load_env()
-        config = load_config(Path(request.config_path) if request.config_path else DEFAULT_CONFIG)
-        client = get_client(config)
-        agent = get_agent(config, client, request.max_steps)
-        ctx = _PENDING_CONTEXTS.get(request.run_id) if request.run_id else None
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-        result = await agent.run(
-            "" if ctx is not None and request.confirms else request.prompt,
-            ctx=ctx,
-            confirm=request.confirms,
-            verbose=request.verbose,
-        )
+def _get_service() -> AgentApiService:
+    if state.service is None:
+        raise HTTPException(status_code=503, detail="Service not initialized.")
 
-        if result.status == "pending":
-            _PENDING_CONTEXTS[result.ctx.exec_id] = result.ctx
-            yield _jsonl(
-                {
-                    "type": "pending",
-                    "run_id": result.ctx.exec_id,
-                    "pending_tool_calls": [
-                        {
-                            "tool_call_id": pending.tool_call.tool_call_id,
-                            "name": pending.tool_call.name,
-                            "args": pending.tool_call.args,
-                            "confirm": pending.confirm,
-                        }
-                        for pending in result.pending_tc
-                    ],
-                }
-            )
-            return
+    return state.service
 
-        _PENDING_CONTEXTS.pop(result.ctx.exec_id, None)
-        yield _jsonl({"type": "result", "output": result.output})
+@app.get("/healthz")
+async def healthz() -> dict[str, bool]:
+    return {"ok": True}
+    
 
-    except Exception as error:
-        yield _jsonl({"type": "error", "message": str(error)})
+# simple impl
+# @app.post("/agent")
+# async def agent_endpoint(req: Request):
+#     body = await req.json()
+#     input_ = RunAgentInput.model_validate(body)
+
+#     enc = EventEncoder(accept=req.headers.get("accept"))
+
+#     async def event_stream():
+#         tid = input_.thread_id
+#         rid = input_.run_id
+#         mid = "msg_test" 
+
+#         yield enc.encode(RunStartedEvent(type=EventType.RUN_STARTED, thread_id=tid, run_id=rid))
+#         yield enc.encode(TextMessageStartEvent(type=EventType.TEXT_MESSAGE_START, message_id=mid, role="assistant"))
+
+#         for char in "AG UI backend connected":
+#             yield enc.encode(TextMessageContentEvent(type=EventType.TEXT_MESSAGE_CONTENT, message_id=mid, delta=char))
+
+#         yield enc.encode(TextMessageEndEvent(type=EventType.TEXT_MESSAGE_END, message_id=mid))
+#         yield enc.encode(RunFinishedEvent(type=EventType.RUN_FINISHED, thread_id=tid, run_id=rid))
+    
+#     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
-def _jsonl(payload: dict[str, Any]) -> str:
-    return json.dumps(payload, ensure_ascii=False) + "\n"
+@app.post("/agent")
+async def agent_endpoint(req: Request):
+    body = await req.json()
+    input_ = RunAgentInput.model_validate(body)
+
+    return StreamingResponse(
+        _get_service().stream_agent(
+            input_=input_,
+            accept=req.headers.get("accept")
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
