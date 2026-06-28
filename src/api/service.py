@@ -7,44 +7,142 @@ from ag_ui.core import Interrupt, RunAgentInput
 from ag_ui.encoder import EventEncoder
 
 from agent.core.agent import Agent
-from agent.core.model.context import AgentResult, PendingToolCall, ToolConfirm
 from api.event_factory import EventFactory
 
+from agent.core.model.context import (
+    AgentResult,
+    AgentStreamResult,
+    AgentStreamTextDelta,
+    AgentStreamTextEnd,
+    AgentStreamTextStart,
+    PendingToolCall,
+    ToolConfirm,
+)
 
 class AgentApiService:
 
     def __init__(self, agent: Agent):
         self._agent = agent
     
-    async def stream_agent(
-            self,
-            input_: RunAgentInput,
-            accept: str | None,
-    ) -> AsyncIterator[str]:
+    # async def stream_agent(self, input_: RunAgentInput, accept: str | None) -> AsyncIterator[str]:
         
+    #     enc = EventEncoder(accept=accept)
+    #     ev = EventFactory(input_)
+
+    #     yield enc.encode(ev.run_started())
+
+    #     try:
+    #         ret = await self._run_agent(input_)
+
+    #         async for chunk in self._to_events(enc=enc, ev=ev, ret=ret):
+    #             yield chunk
+
+    #     except Exception as error:
+    #         # yield enc.encode(ev.run_error(str(error), "agent_error"))
+    #         async for chunk in self._text_events(enc=enc, ev=ev, text=f"error occurred: {error}"):
+    #             yield chunk
+
+    #         yield enc.encode(ev.run_success())
+    #         return
+
+    async def stream_agent(self, input_: RunAgentInput, accept: str | None) -> AsyncIterator[str]:
+
         enc = EventEncoder(accept=accept)
         ev = EventFactory(input_)
 
         yield enc.encode(ev.run_started())
 
-        try:
-            ret = await self._run_agent(input_)
+        mid: str | None = None
+        s_text = False   # streamed_text
 
-            async for chunk in self._to_events(enc=enc, ev=ev, ret=ret):
-                yield chunk
+        try:
+            async for event in self._stream_agent_events(input_):
+
+                # start
+                if isinstance(event, AgentStreamTextStart):
+                    if mid is None:
+                        mid = f"msg_{uuid.uuid4().hex}"
+                        yield enc.encode(ev.text_start(mid))
+                    continue
+                
+                # content
+                if isinstance(event, AgentStreamTextDelta):
+                    if mid is None:
+                        mid = f"msg_{uuid.uuid4().hex}"
+                        yield enc.encode(ev.text_start(mid))
+
+                    s_text = True
+                    yield enc.encode(ev.text_content(mid, event.delta))
+                    continue
+
+                # end
+                if isinstance(event, AgentStreamTextEnd):
+                    if mid is not None:
+                        yield enc.encode(ev.text_end(mid))
+                        mid = None
+                    continue
+
+                # result
+                if isinstance(event, AgentStreamResult):
+                    if mid is not None:
+                        yield enc.encode(ev.text_end(mid))
+                        mid = None
+
+                    ret = event.result
+
+                    if ret.status == "pending":
+                        interrupts = self._pending(
+                            pending_tc=ret.pending_tc,
+                            session_id=ev.thread_id,
+                            agent_run_id=ret.ctx.exec_id,
+                        )
+                        yield enc.encode(ev.run_interrupt(interrupts))
+                        return
+
+                    if s_text:
+                        yield enc.encode(ev.run_success())
+                        return
+
+                    async for chunk in self._to_events(enc=enc, ev=ev, ret=ret):
+                        yield chunk
+                    return
+
+            raise RuntimeError("Agent stream finished without result.")
 
         except Exception as error:
-            # yield enc.encode(ev.run_error(str(error), "agent_error"))
+            if mid is not None:
+                yield enc.encode(ev.text_end(mid))
+
             async for chunk in self._text_events(enc=enc, ev=ev, text=f"error occurred: {error}"):
                 yield chunk
 
             yield enc.encode(ev.run_success())
+
+
+    async def _stream_agent_events(self, input_: RunAgentInput):
+        sid = input_.thread_id
+
+        if input_.resume:
+            confirms = self._resume(input_.resume)
+
+            async for event in self._agent.stream(prompt="", session_id=sid, confirm=confirms):
+                yield event
+
             return
+
+        prompt = self._last_user_text(input_)
+        if not prompt:
+            raise ValueError("No user message found.")
+
+        async for event in self._agent.stream(prompt=prompt, session_id=sid):
+            yield event
 
 
     async def _run_agent(self, input_: RunAgentInput) -> AgentResult:
+
         if input_.resume:
             confirms = self._resume(input_.resume)
+
             return await self._agent.run(
                 prompt="",
                 session_id=input_.thread_id,

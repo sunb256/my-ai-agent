@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -29,3 +29,14 @@ class Response(BaseModel):
     @property
     def tool_calls(self):
         return [tc for tc in self.content if isinstance(tc, ToolCall)]
+
+
+class LLMTextDelta(BaseModel):
+    type: Literal["text_delta"] = "text_delta"
+    delta: str
+
+class LLMResponseDone(BaseModel):
+    type: Literal["done"] = "done"
+    response: Response
+
+LLMStreamEvent = LLMTextDelta | LLMResponseDone
