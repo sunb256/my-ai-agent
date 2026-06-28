@@ -1,6 +1,9 @@
 ---
 name: data-file-analysis
-description: sandbox 内でアップロード済みの CSV、Excel、JSON、PDF、Markdown、テキストファイルを解析するときに使う。ファイル構造、列、シート、ページの概要を確認し、次の分析手順を決めるための skill。
+description: Use this skill when the user asks to inspect, profile, summarize, validate, or analyze uploaded data/document files in the sandbox, including
+  Excel/xlsx/xls spreadsheets, CSV/TSV, JSON/JSONL, PDF, Markdown, and text files. Use it for checking workbook sheet names, sheet structure, columns, data
+  types, missing values, sample rows, file structure, and deciding the next analysis steps before computing results such as rankings, totals, statistics, or
+  JSON answers. 日本語では、Excel、xlsx、CSV、シート構造、列確認、欠損確認、ファイル分析、データ分析、集計、ランキング、JSON出力などを依頼されたときに使う。
 ---
 
 # データファイル解析
