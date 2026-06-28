@@ -1,4 +1,51 @@
 
+
+ - src/agent/core/model/context.py
+ - src/agent/core/model/llm_message.py
+
+ - src/agent/core/llm_client.py
+    - _build_kwargs
+    - _merge_tool_name
+
+ - src/agent/core/skills.py
+    - select_requested_skills
+    - make_requested_skills_prompt
+
+ - src/agent/core/agent.py
+    - _StepComplete
+    - run
+    - stream
+    - _run_loop
+    - step
+    - _step_loop
+    - _run_before_llm_cb
+    - _apply_llm_response
+    - _tool_results_since
+    - _get_request(skill関係), _last_user_text
+    - _tool_rets_output
+
+ - api
+    - src/api/event_factory.py
+    - src/api/service.py
+    - src/api/main.py
+  
+  - web
+    - src/frontend/web/src/components/assistant-ui/thread.tsx
+    - src/frontend/web/src/index.css
+    - src/frontend/web/src/components/AgUiInterruptCard.tsx
+    - src/frontend/web/src/components/AgUiInterruptPanel.tsx
+    - src/frontend/web/src/runtime/MyRuntimeProvider.tsx
+    - src/frontend/web/src/App.tsx
+
+    - src/frontend/web/src/lib/utils.ts
+    - src/frontend/web/tsconfig.json
+    - src/frontend/web/tsconfig.app.json
+    - src/frontend/web/vite.config.ts
+    - src/frontend/web/.env.local
+
+
+------------------------------------------
+
  - init.py
     - get_agent()
  
