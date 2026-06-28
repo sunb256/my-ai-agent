@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from pydantic import BaseModel
 
 from agent.core.memory.session import Session, BaseSessionManager
-from agent.core.model.types import Event, ToolCall
+from agent.core.model.types import Event, ToolCall, ToolResult
 
 if TYPE_CHECKING:
       from agent.core.memory.long_term import TaskMemoryManager
@@ -80,9 +80,29 @@ class AgentStreamTextEnd:
 class AgentStreamResult:
     result: AgentResult
 
+@dataclass(frozen=True)
+class AgentStreamToolCallStart:
+    tool_call: ToolCall
+
+@dataclass(frozen=True)
+class AgentStreamToolCallArgs:
+    tool_call: ToolCall
+
+@dataclass(frozen=True)
+class AgentStreamToolCallEnd:
+    tool_call: ToolCall
+
+@dataclass(frozen=True)
+class AgentStreamToolCallResult:
+    tool_result: ToolResult
+
 AgentStreamEvent = (
     AgentStreamTextStart
     | AgentStreamTextDelta
     | AgentStreamTextEnd
+    | AgentStreamToolCallStart
+    | AgentStreamToolCallArgs
+    | AgentStreamToolCallEnd
+    | AgentStreamToolCallResult
     | AgentStreamResult
 )

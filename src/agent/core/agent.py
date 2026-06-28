@@ -37,6 +37,10 @@ from .model.context import (
     AgentStreamTextDelta,
     AgentStreamTextEnd,
     AgentStreamTextStart,
+    AgentStreamToolCallArgs,
+    AgentStreamToolCallEnd,
+    AgentStreamToolCallResult,
+    AgentStreamToolCallStart,
     ExecContext,
     PendingToolCall,
     ToolConfirm,
@@ -182,8 +186,15 @@ class Agent:
             ctx.memory_manager = self.memory_manager
 
         # hitl
+        # if confirm:
+        #     await self._process_confirm(ctx, confirm)
+
         if confirm:
-            await self._process_confirm(ctx, confirm)
+            conf_rets = await self._process_confirm(ctx, confirm)
+
+            if stream_llm:
+                for tool_result in conf_rets:
+                    yield AgentStreamToolCallResult(tool_result)
 
         if prompt:
             user_event = Event.new_msg(ctx.exec_id, USER, prompt)
@@ -223,6 +234,9 @@ class Agent:
                 if self._is_final_response(event):
                     ctx.final_result = self._get_final_result(event)
                     break
+
+            if ctx.final_result is None and conf_rets:
+                ctx.final_result = self._tool_rets_output(conf_rets)
 
             # save memory
             if self.memory_manager:
@@ -288,8 +302,29 @@ class Agent:
         if res is None:
             raise RuntimeError("LLM finished without response.")
 
-        result = await self._apply_llm_response(ctx, res, verbose=verbose)
-        yield _StepComplete(result)
+        tool_calls = await self._apply_llm_response(ctx, res, verbose=verbose)
+        if tool_calls:
+            for tool_call in tool_calls:
+                yield AgentStreamToolCallStart(tool_call)
+                yield AgentStreamToolCallArgs(tool_call)
+                yield AgentStreamToolCallEnd(tool_call)
+
+            before_event_cnt = len(ctx.events)
+            result = await self.act(ctx, tool_calls)
+
+            for tool_result in self._tool_results_since(ctx, before_event_cnt):
+                yield AgentStreamToolCallResult(tool_result)
+
+            if result and result.status == "pending":
+                yield _StepComplete(result)
+                return
+
+            ctx.increment()
+            yield _StepComplete(None)
+            return
+
+        ctx.increment()
+        yield _StepComplete(None)
 
     async def _run_before_llm_cb(self, ctx: ExecContext, req: Request) -> Response | None:
 
@@ -305,7 +340,7 @@ class Agent:
         return None
 
 
-    async def _apply_llm_response(self, ctx: ExecContext, res: Response, verbose: bool) -> AgentResult | None:
+    async def _apply_llm_response(self, ctx: ExecContext, res: Response, verbose: bool) -> list[ToolCall]:
 
         if res.err_msg:
             raise RuntimeError(res.err_msg)
@@ -316,15 +351,27 @@ class Agent:
         res_event = Event.new(ctx.exec_id, self.role, res.content)
         ctx.add_event(res_event)
 
-        tool_calls = [c for c in res.content if isinstance(c, ToolCall)]
-        if tool_calls:
-            result = await self.act(ctx, tool_calls)
-            if result and result.status == "pending":
-                return result
+        return [c for c in res.content if isinstance(c, ToolCall)]
 
-        ctx.increment()
-        return None
+        # tool_calls = [c for c in res.content if isinstance(c, ToolCall)]
+        # if tool_calls:
+        #     result = await self.act(ctx, tool_calls)
+        #     if result and result.status == "pending":
+        #         return result
 
+        # ctx.increment()
+        # return None
+
+    def _tool_results_since(self, ctx: ExecContext, event_cnt: int) -> list[ToolResult]:
+        
+        results: list[ToolResult] = []
+
+        for event in ctx.events[event_cnt:]:
+            for item in event.content:
+                if isinstance(item, ToolResult):
+                    results.append(item)
+
+        return results
 
     async def think(self, req: Request) -> Response:
         return await self.client.call_llm(req)
@@ -471,6 +518,22 @@ class Agent:
         else:
             return get_final_by_plain_message(event)
     
+    def _tool_rets_output(self, results: list[ToolResult]) -> str:
+
+        lines: list[str] = []
+
+        for result in results:
+            content = result.content[0] if result.content else ""
+
+            if content:
+                lines.append(str(content))
+            elif result.status == STR_SUCCESS:
+                lines.append(f"{result.name} completed.")
+            else:
+                lines.append(f"{result.name} failed.")
+
+        return "\n".join(lines)
+
     def _setup_tools(self, tools: list[BaseTool]) -> list[BaseTool]:
         tools = list(tools)
 
@@ -602,7 +665,7 @@ class Agent:
            f"{tools_json}"
         )
 
-    async def _process_confirm(self, ctx: ExecContext, confirms: list[ToolConfirm]):
+    async def _process_confirm(self, ctx: ExecContext, confirms: list[ToolConfirm]) -> list[ToolResult]:
 
         raw_pending = ctx.state.pop("pending_tool_calls", [])
         pending = [PendingToolCall.model_validate(d) for d in raw_pending]
@@ -636,6 +699,8 @@ class Agent:
         if results:
             event = Event.new(ctx.exec_id, self.role, results)
             ctx.add_event(event)
+
+        return results
 
 
     def _log_response(self, res: Response):

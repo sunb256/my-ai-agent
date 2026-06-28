@@ -146,7 +146,7 @@ class Client:
                     fn = getattr(item, "function", None)
                     if fn is not None:
                         if getattr(fn, "name", None):
-                            buf["name"] += fn.name
+                            buf["name"] = self._merge_tool_name(buf["name"], fn.name)
                         
                         if getattr(fn, "arguments", None):
                             buf["arguments"] += fn.arguments
@@ -156,20 +156,23 @@ class Client:
             full = "".join(text_parts)
             if full:
                 contents.append(Message(role="assistant", content=full))
-            
+                        
             for idx in sorted(tool_buffs):
                 buf = tool_buffs[idx]
-                if not buf["name"]:
+
+                name = buf["name"].strip()
+                if not name:
                     continue
-            
+
                 try:
                     args = json.loads(buf["arguments"] or "{}")
                 except JSONDecodeError:
                     args = {}
-                
-                tc = ToolCall(tool_call_id=buf["id"]or f"call_{idx}", name=buf["name"], args=args)
+
+                tc = ToolCall(tool_call_id=buf["id"] or f"call_{idx}", name=name, args=args)
                 contents.append(tc)
-            
+
+
             yield LLMResponseDone(response=Response(content=contents))
         
         except Exception as error:
@@ -191,6 +194,20 @@ class Client:
         
         return kwargs
 
+    def _merge_tool_name(self, current: str, chunk: str) -> str:
+        if not chunk:
+            return current
+        if not current:
+            return chunk
+        if chunk == current or current.endswith(chunk):
+            return current
+
+        max_overlap = min(len(current), len(chunk))
+        for size in range(max_overlap, 0, -1):
+            if current.endswith(chunk[:size]):
+                return current + chunk[size:]
+
+        return current + chunk
 
     def _parse_response(self, res: Any) -> Response:
         """

@@ -1,3 +1,4 @@
+import json
 from ag_ui.core import (
     EventType,
     Interrupt,
@@ -10,6 +11,10 @@ from ag_ui.core import (
     TextMessageContentEvent,
     TextMessageEndEvent,
     TextMessageStartEvent,
+    ToolCallArgsEvent,
+    ToolCallEndEvent,
+    ToolCallResultEvent,
+    ToolCallStartEvent,
 )
 
 
@@ -34,6 +39,7 @@ class EventFactory:
         )
 
     def run_success(self) -> RunFinishedEvent:
+
         return RunFinishedEvent(
             type=EventType.RUN_FINISHED,
             thread_id=self.thread_id,
@@ -41,10 +47,7 @@ class EventFactory:
             outcome=RunFinishedSuccessOutcome(),
         )
 
-    def run_interrupt(
-        self,
-        interrupts: list[Interrupt],
-    ) -> RunFinishedEvent:
+    def run_interrupt(self, interrupts: list[Interrupt]) -> RunFinishedEvent:
         
         return RunFinishedEvent(
             type=EventType.RUN_FINISHED,
@@ -55,11 +58,7 @@ class EventFactory:
             ),
         )
 
-    def run_error(
-        self,
-        message: str,
-        code: str = "agent_error",
-    ) -> RunErrorEvent:
+    def run_error(self, message: str, code: str = "agent_error") -> RunErrorEvent:
         
         return RunErrorEvent(
             type=EventType.RUN_ERROR,
@@ -67,10 +66,7 @@ class EventFactory:
             code=code,
         )
 
-    def text_start(
-        self,
-        message_id: str,
-    ) -> TextMessageStartEvent:
+    def text_start(self, message_id: str) -> TextMessageStartEvent:
         
         return TextMessageStartEvent(
             type=EventType.TEXT_MESSAGE_START,
@@ -78,11 +74,7 @@ class EventFactory:
             role="assistant",
         )
 
-    def text_content(
-        self,
-        message_id: str,
-        delta: str,
-    ) -> TextMessageContentEvent:
+    def text_content(self, message_id: str, delta: str) -> TextMessageContentEvent:
         
         return TextMessageContentEvent(
             type=EventType.TEXT_MESSAGE_CONTENT,
@@ -90,12 +82,42 @@ class EventFactory:
             delta=delta,
         )
 
-    def text_end(
-        self,
-        message_id: str,
-    ) -> TextMessageEndEvent:
+    def text_end(self, message_id: str) -> TextMessageEndEvent:
         
         return TextMessageEndEvent(
             type=EventType.TEXT_MESSAGE_END,
             message_id=message_id,
+        )
+    
+    def tool_call_start(self, tool_call_id: str, tool_name: str) -> ToolCallStartEvent:
+
+        return ToolCallStartEvent(
+            type=EventType.TOOL_CALL_START,
+            tool_call_id=tool_call_id,
+            tool_call_name=tool_name,
+        )
+
+    def tool_call_args(self, tool_call_id: str, args: dict) -> ToolCallArgsEvent:
+
+        return ToolCallArgsEvent(
+            type=EventType.TOOL_CALL_ARGS,
+            tool_call_id=tool_call_id,
+            delta=json.dumps(args, ensure_ascii=False),
+        )
+
+    def tool_call_end(self, tool_call_id: str) -> ToolCallEndEvent:
+        
+        return ToolCallEndEvent(
+            type=EventType.TOOL_CALL_END,
+            tool_call_id=tool_call_id,
+        )
+
+    def tool_call_result(self, message_id: str, tool_call_id: str, content: str) -> ToolCallResultEvent:
+
+        return ToolCallResultEvent(
+            type=EventType.TOOL_CALL_RESULT,
+            message_id=message_id,
+            tool_call_id=tool_call_id,
+            content=content,
+            role="tool",
         )
