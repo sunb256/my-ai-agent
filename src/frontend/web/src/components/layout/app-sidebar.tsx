@@ -39,12 +39,13 @@ const configItems = [
 
 export function AppSidebar() {
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="icon" className="bg-gray-100">
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg">
               <div className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
+                {/* <span className="text-red-400">F</span> */}
                 <Bot className="size-4" />
               </div>
 
@@ -101,9 +102,11 @@ export function AppSidebar() {
 
       <SidebarFooter>
         <div className="px-2 py-2">
+{/* 
           <Badge variant="outline" className="w-full justify-center">
             local
           </Badge>
+  */}
         </div>
       </SidebarFooter>
 
