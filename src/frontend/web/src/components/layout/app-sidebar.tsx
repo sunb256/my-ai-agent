@@ -22,9 +22,6 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 
-import { Badge } from "@/components/ui/badge";
-
-
 const mainItems = [
   { title: "Chat", icon: MessageSquare, href: "#" },
   { title: "Runs", icon: History, href: "#" },
@@ -102,11 +99,6 @@ export function AppSidebar() {
 
       <SidebarFooter>
         <div className="px-2 py-2">
-{/* 
-          <Badge variant="outline" className="w-full justify-center">
-            local
-          </Badge>
-  */}
         </div>
       </SidebarFooter>
 

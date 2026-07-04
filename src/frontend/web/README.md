@@ -4,8 +4,7 @@
 ## 確認方法
 
 ```bash
-cd src/frontend/web
-npm run dev
+cd src/frontend/web && npm run dev
 
 # -> http://localhost:5173
 ```

@@ -186,9 +186,6 @@ class Agent:
             ctx.memory_manager = self.memory_manager
 
         # hitl
-        # if confirm:
-        #     await self._process_confirm(ctx, confirm)
-
         if confirm:
             conf_rets = await self._process_confirm(ctx, confirm)
 
@@ -205,6 +202,7 @@ class Agent:
 
         try:
             while ctx.is_continue(self.max_step):
+                
                 step_result: AgentResult | None = None
 
                 async for event in self._step_loop(

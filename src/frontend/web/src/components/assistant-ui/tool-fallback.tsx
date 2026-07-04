@@ -25,6 +25,8 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
+import Editor from "@monaco-editor/react";
+
 const ANIMATION_DURATION = 200;
 
 const pressable = "active:scale-[0.98]";
@@ -145,7 +147,7 @@ function ToolFallbackTrigger({
     <CollapsibleTrigger
       data-slot="tool-fallback-trigger"
       className={cn(
-        "aui-tool-fallback-trigger group/trigger text-muted-foreground hover:text-foreground flex w-fit origin-left items-center gap-2 py-1.5 text-sm transition-[color,scale] active:scale-[0.98]",
+        "aui-tool-fallback-trigger group/trigger text-muted-foreground hover:text-foreground flex w-fit origin-left items-center gap-2 pt-0 pb-5 text-sm transition-[color,scale] active:scale-[0.98]",
         className,
       )}
       {...props}
@@ -215,7 +217,7 @@ function ToolFallbackContent({
     >
       <div
         className={cn(
-          "flex flex-col gap-2 ps-6 pt-1 pb-2 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:animate-none",
+          "flex flex-col gap-2 ps-6 pt-0 pb-5 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:animate-none",
           "group-data-[state=open]/collapsible-content:animate-in group-data-[state=open]/collapsible-content:fade-in-0 group-data-[state=open]/collapsible-content:blur-in-[2px] group-data-[state=open]/collapsible-content:slide-in-from-top-1",
           "group-data-[state=closed]/collapsible-content:animate-out group-data-[state=closed]/collapsible-content:fade-out-0 group-data-[state=closed]/collapsible-content:blur-out-[2px] group-data-[state=closed]/collapsible-content:slide-out-to-top-1",
           "group-data-[state=closed]/collapsible-content:duration-(--animation-duration) group-data-[state=open]/collapsible-content:duration-(--animation-duration)",
@@ -227,14 +229,201 @@ function ToolFallbackContent({
   );
 }
 
+
+type CodeLanguage = "json" | "plaintext" | "python";
+
+type ExecPythonArgsView = {
+  code: string;
+  rest: Record<string, unknown> | null;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const looksJsonLike = (value: string) => {
+  const text = value.trim();
+  return text.startsWith("{") || text.startsWith("[") || text.startsWith("\"");
+};
+
+function parseJsonLike(value: unknown, depth = 0): unknown {
+  if (depth > 3) return value;
+
+  if (typeof value === "string" && looksJsonLike(value)) {
+    try {
+      return parseJsonLike(JSON.parse(value), depth + 1);
+    } catch {
+      return value;
+    }
+  }
+
+  if (Array.isArray(value)) return value.map((item) => parseJsonLike(item, depth + 1));
+  return value;
+}
+
+const unwrapSingleValue = (value: unknown) => 
+  Array.isArray(value) && value.length === 1 ? value[0]: value;
+
+function formatToolValue(value: unknown): { value: string, language: CodeLanguage } {
+  const parsed = parseJsonLike(value);
+
+  if (typeof parsed === "string") {
+    return { value: parsed, language: "plaintext" };
+  }
+
+  return {
+    value: JSON.stringify(parsed, null, 2),
+    language: "json",
+  };
+}
+
+function normalizeExecutionResult(value: unknown) {
+  const parsed = unwrapSingleValue(parseJsonLike(value));
+  if (!isRecord(parsed)) return null;
+
+  const hasExecutionShape =
+    "stdout" in parsed ||
+    "stderr" in parsed ||
+    "exit_code" in parsed ||
+    "ok" in parsed;
+
+  if (!hasExecutionShape) return null;
+
+  return {
+    stdout: typeof parsed.stdout === "string" ? parsed.stdout : "",
+    stderr: typeof parsed.stderr === "string" ? parsed.stderr : "",
+    exitCode: typeof parsed.exit_code === "number" ? parsed.exit_code : undefined,
+    ok: typeof parsed.ok === "boolean" ? parsed.ok : undefined,
+  };
+}
+
+function normalizeExecPythonArgs(
+  toolName: string,
+  argsText: string,
+): ExecPythonArgsView | null {
+  if (toolName !== "exec_python") return null;
+
+  const parsed = unwrapSingleValue(parseJsonLike(argsText));
+  if (!isRecord(parsed) || typeof parsed.code !== "string") return null;
+
+  const { code: _code, ...rest } = parsed;
+  const hasRest = Object.keys(rest).length > 0;
+
+  return {
+    code: parsed.code,
+    rest: hasRest ? rest : null,
+  };
+}
+
+
+// function codeViewerHeight(value: string) {
+//   const lines = value.split("\n").length;
+//   return `${Math.min(360, Math.max(96, lines * 18 + 24))}px`;
+// }
+
+function codeViewerHeight(value: string) {
+  const physicalLines = value.split("\n").length;
+  const estimatedWrappedLines = value
+    .split("\n")
+    .reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / 100)), 0);
+
+  const lines = Math.max(physicalLines, estimatedWrappedLines);
+  return `${Math.min(560, Math.max(180, lines * 20 + 32))}px`;
+}
+
+function ToolCodeViewer({
+  value,
+  language,
+}: {
+  value: string;
+  language: CodeLanguage
+}) {
+  return (
+    <div className="overflow-hidden border bg-muted/50">
+      <Editor
+        height={codeViewerHeight(value)}
+        language={language}
+        value={value}
+        theme="vs-dark"
+        options={{
+          readOnly: true,
+          minimap: {enabled: false},
+          lineNumbers: "on",
+          wordWrap: "on",
+          scrollBeyondLastLine: false,
+          folding: false,
+          renderLineHighlight: "none",
+          automaticLayout: true,
+          lineHeight: 18,
+          padding: {
+            top: 10,
+            bottom: 10,
+          },
+        }}
+      />
+    </div>
+  )
+}
+
+
+// function ToolFallbackArgs({
+//   argsText,
+//   className,
+//   ...props
+// }: React.ComponentProps<"div"> & {
+//   argsText?: string;
+// }) {
+//   if (!argsText) return null;
+
+//   return (
+//     <div
+//       data-slot="tool-fallback-args"
+//       className={cn("aui-tool-fallback-args", className)}
+//       {...props}
+//     >
+//       <pre className="aui-tool-fallback-args-value bg-muted/50 text-foreground/90 rounded-md p-2.5 text-xs whitespace-pre-wrap">
+//         {argsText}
+//       </pre>
+//     </div>
+//   );
+// }
+// function ToolFallbackResult({
+//   result,
+//   className,
+//   ...props
+// }: React.ComponentProps<"div"> & {
+//   result?: unknown;
+// }) {
+//   if (result === undefined) return null;
+
+//   return (
+//     <div
+//       data-slot="tool-fallback-result"
+//       className={cn("aui-tool-fallback-result", className)}
+//       {...props}
+//     >
+//       <p className="aui-tool-fallback-result-header text-muted-foreground text-xs font-medium">
+//         Result:
+//       </p>
+//       <pre className="aui-tool-fallback-result-content bg-muted/50 text-foreground/90 mt-1 rounded-md p-2.5 text-xs whitespace-pre-wrap">
+//         {typeof result === "string" ? result : JSON.stringify(result, null, 2)}
+//       </pre>
+//     </div>
+//   );
+// }
+
 function ToolFallbackArgs({
   argsText,
+  toolName,
   className,
   ...props
 }: React.ComponentProps<"div"> & {
   argsText?: string;
+  toolName: string;
 }) {
   if (!argsText) return null;
+
+  const execPythonArgs = normalizeExecPythonArgs(toolName, argsText);
+  const formatted = formatToolValue(argsText);
 
   return (
     <div
@@ -242,9 +431,28 @@ function ToolFallbackArgs({
       className={cn("aui-tool-fallback-args", className)}
       {...props}
     >
-      <pre className="aui-tool-fallback-args-value bg-muted/50 text-foreground/90 rounded-md p-2.5 text-xs whitespace-pre-wrap">
-        {argsText}
-      </pre>
+      {execPythonArgs ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-muted-foreground text-xs font-medium">
+            Python code:
+          </p>
+          <ToolCodeViewer value={execPythonArgs.code} language="python" />
+
+          {execPythonArgs.rest && (
+            <>
+              <p className="text-muted-foreground text-xs font-medium">
+                Other args:
+              </p>
+              <ToolCodeViewer
+                value={JSON.stringify(execPythonArgs.rest, null, 2)}
+                language="json"
+              />
+            </>
+          )}
+        </div>
+      ) : (
+        <ToolCodeViewer value={formatted.value} language={formatted.language} />
+      )}
     </div>
   );
 }
@@ -258,6 +466,9 @@ function ToolFallbackResult({
 }) {
   if (result === undefined) return null;
 
+  const execution = normalizeExecutionResult(result);
+  const formatted = formatToolValue(result);
+
   return (
     <div
       data-slot="tool-fallback-result"
@@ -267,9 +478,21 @@ function ToolFallbackResult({
       <p className="aui-tool-fallback-result-header text-muted-foreground text-xs font-medium">
         Result:
       </p>
-      <pre className="aui-tool-fallback-result-content bg-muted/50 text-foreground/90 mt-1 rounded-md p-2.5 text-xs whitespace-pre-wrap">
-        {typeof result === "string" ? result : JSON.stringify(result, null, 2)}
-      </pre>
+
+      {execution ? (
+        <div className="mt-1 flex flex-col gap-2">
+          <p className="text-muted-foreground text-xs">
+            ok: {String(execution.ok ?? execution.exitCode === 0)}
+            {execution.exitCode !== undefined ? ` / exit_code: ${execution.exitCode}` : ""}
+          </p>
+          {execution.stdout && <ToolCodeViewer value={execution.stdout} language="plaintext" />}
+          {execution.stderr && <ToolCodeViewer value={execution.stderr} language="plaintext" />}
+        </div>
+      ) : (
+        <div className="mt-1">
+          <ToolCodeViewer value={formatted.value} language={formatted.language} />
+        </div>
+      )}
     </div>
   );
 }
@@ -553,10 +776,12 @@ const ToolFallbackImpl: ToolCallMessagePartComponent = ({
       <ToolFallbackTrigger toolName={toolName} status={status} />
       <ToolFallbackContent>
         <ToolFallbackError status={status} />
-        <ToolFallbackArgs
-          argsText={argsText}
-          className={cn(isCancelled && "opacity-60")}
-        />
+
+        <ToolFallbackArgs 
+          argsText={argsText} 
+          className={cn(isCancelled && "opacity-60")} 
+          toolName={toolName} />
+
         {isRequiresAction && (
           <ToolFallbackApproval
             addResult={addResult}
