@@ -7,14 +7,13 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 
 export function AppHeader() {
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-background px-4">
+    <header className="flex h-11 shrink-0 items-center gap-3 border-b bg-background px-3">
       <SidebarTrigger />
 
-      <Separator orientation="vertical" className="h-5" />
+      <Separator orientation="vertical" />
 
       <div className="min-w-0 flex-1">
         <h1 className="truncate text-sm font-medium">Chat</h1>
-        <p className="truncate text-xs text-muted-foreground">AG-UI backendに接続中 ...</p>
       </div>
 
       <div className="flex items-center gap-2">
