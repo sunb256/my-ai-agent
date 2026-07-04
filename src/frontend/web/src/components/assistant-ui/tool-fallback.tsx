@@ -147,7 +147,7 @@ function ToolFallbackTrigger({
     <CollapsibleTrigger
       data-slot="tool-fallback-trigger"
       className={cn(
-        "aui-tool-fallback-trigger group/trigger text-muted-foreground hover:text-foreground flex w-fit origin-left items-center gap-2 pt-0 pb-5 text-sm transition-[color,scale] active:scale-[0.98]",
+        "aui-tool-fallback-trigger group/trigger text-muted-foreground hover:text-foreground flex w-fit origin-left items-center gap-2 pt-0 pb-3 text-sm transition-[color,scale] active:scale-[0.98]",
         className,
       )}
       {...props}
@@ -217,7 +217,7 @@ function ToolFallbackContent({
     >
       <div
         className={cn(
-          "flex flex-col gap-2 ps-6 pt-0 pb-5 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:animate-none",
+          "flex flex-col gap-2 ps-6 pt-0 pb-3 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:animate-none",
           "group-data-[state=open]/collapsible-content:animate-in group-data-[state=open]/collapsible-content:fade-in-0 group-data-[state=open]/collapsible-content:blur-in-[2px] group-data-[state=open]/collapsible-content:slide-in-from-top-1",
           "group-data-[state=closed]/collapsible-content:animate-out group-data-[state=closed]/collapsible-content:fade-out-0 group-data-[state=closed]/collapsible-content:blur-out-[2px] group-data-[state=closed]/collapsible-content:slide-out-to-top-1",
           "group-data-[state=closed]/collapsible-content:duration-(--animation-duration) group-data-[state=open]/collapsible-content:duration-(--animation-duration)",
@@ -314,20 +314,24 @@ function normalizeExecPythonArgs(
   };
 }
 
-
-// function codeViewerHeight(value: string) {
-//   const lines = value.split("\n").length;
-//   return `${Math.min(360, Math.max(96, lines * 18 + 24))}px`;
-// }
+const CODE_VIEWER_LINE_HEIGHT = 17.1;
+const CODE_VIEWER_MIN_HEIGHT = 56;
+const CODE_VIEWER_MAX_HEIGHT = 560;
 
 function codeViewerHeight(value: string) {
-  const physicalLines = value.split("\n").length;
-  const estimatedWrappedLines = value
+  const lines = value
+    .trimEnd()
     .split("\n")
-    .reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / 100)), 0);
+    .reduce((sum, line) => {
+      return sum + Math.max(1, Math.ceil(line.length / 100));
+    }, 0);
 
-  const lines = Math.max(physicalLines, estimatedWrappedLines);
-  return `${Math.min(560, Math.max(180, lines * 20 + 32))}px`;
+    return `${Math.min(
+              CODE_VIEWER_MAX_HEIGHT,
+              Math.max(
+                CODE_VIEWER_MIN_HEIGHT,
+                lines * CODE_VIEWER_LINE_HEIGHT,
+              ),)}px`;
 }
 
 function ToolCodeViewer({
@@ -353,63 +357,16 @@ function ToolCodeViewer({
           folding: false,
           renderLineHighlight: "none",
           automaticLayout: true,
-          lineHeight: 18,
+          lineHeight: CODE_VIEWER_LINE_HEIGHT,
           padding: {
-            top: 10,
-            bottom: 10,
+            top: 7,
+            bottom: 7,
           },
         }}
       />
     </div>
   )
 }
-
-
-// function ToolFallbackArgs({
-//   argsText,
-//   className,
-//   ...props
-// }: React.ComponentProps<"div"> & {
-//   argsText?: string;
-// }) {
-//   if (!argsText) return null;
-
-//   return (
-//     <div
-//       data-slot="tool-fallback-args"
-//       className={cn("aui-tool-fallback-args", className)}
-//       {...props}
-//     >
-//       <pre className="aui-tool-fallback-args-value bg-muted/50 text-foreground/90 rounded-md p-2.5 text-xs whitespace-pre-wrap">
-//         {argsText}
-//       </pre>
-//     </div>
-//   );
-// }
-// function ToolFallbackResult({
-//   result,
-//   className,
-//   ...props
-// }: React.ComponentProps<"div"> & {
-//   result?: unknown;
-// }) {
-//   if (result === undefined) return null;
-
-//   return (
-//     <div
-//       data-slot="tool-fallback-result"
-//       className={cn("aui-tool-fallback-result", className)}
-//       {...props}
-//     >
-//       <p className="aui-tool-fallback-result-header text-muted-foreground text-xs font-medium">
-//         Result:
-//       </p>
-//       <pre className="aui-tool-fallback-result-content bg-muted/50 text-foreground/90 mt-1 rounded-md p-2.5 text-xs whitespace-pre-wrap">
-//         {typeof result === "string" ? result : JSON.stringify(result, null, 2)}
-//       </pre>
-//     </div>
-//   );
-// }
 
 function ToolFallbackArgs({
   argsText,

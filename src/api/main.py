@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,7 +22,8 @@ state = State()
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     load_env()
-    config = load_config(Path(DEFAULT_CONFIG))
+    config_path = Path(os.environ.get("MY_AI_AGENT_CONFIG", str(DEFAULT_CONFIG)))
+    config = load_config(config_path)
     client = get_client(config)
     session_manager = InMemorySessionManager()
 

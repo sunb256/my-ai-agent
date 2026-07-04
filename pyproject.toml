@@ -13,6 +13,7 @@ dependencies = [
     "pydantic>=2.13.4",
     "pyyaml>=6.0.3",
     "scikit-learn>=1.9.0",
+    "uvicorn[standard]>=0.49.0",
 ]
 
 [project.scripts]
@@ -31,7 +32,7 @@ exclude-newer = "1 week"
 cache-dir = ".uv-cache"
 
 [tool.ruff]
-line-length = 120
+line-length = 130
 
 [tool.ruff.lint]
 select = ["E", "F", "C901"]
