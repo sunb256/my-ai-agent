@@ -1,0 +1,49 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: infra/docker/backend.Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      MY_AI_AGENT_CONFIG: /app/src/agent/config/config.yml
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY}
+      LLM_MODEL: ${LLM_MODEL:?Set LLM_MODEL}
+      LLM_BASE_URL: ${LLM_BASE_URL:?Set LLM_BASE_URL}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-}
+      AGENT_CODE_EXEC: ${AGENT_CODE_EXEC:-true}
+      AGENT_CODE_EXEC_IMAGE: ${AGENT_CODE_EXEC_IMAGE:-ai-agent-python:local}
+      AGENT_CODE_EXEC_RUNTIME: ${AGENT_CODE_EXEC_RUNTIME:-docker}
+      AGENT_SKILLS_DIR: ${AGENT_SKILLS_DIR:-resources/skills}
+      PRELOAD_SANDBOX_IMAGE: ${PRELOAD_SANDBOX_IMAGE:-true}
+    privileged: true
+    volumes:
+      - microsandbox-data:/root/.local/share/microsandbox
+      - microsandbox-cache:/root/.cache/microsandbox
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./resources:/app/resources:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  frontend:
+    build:
+      context: .
+      dockerfile: infra/docker/frontend.Dockerfile
+      args:
+        VITE_AG_UI_URL: /agent
+    ports:
+      - "5173:80"
+    volumes:
+      - ./infra/docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  microsandbox-data:
+  microsandbox-cache:

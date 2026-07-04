@@ -77,6 +77,7 @@ class Agent:
         # code exec
         is_code_exec: bool = True,
         code_exec_image: str = "python",
+        code_exec_runtime: str = "microsandbox",
         # skill
         skills_path: str | None = None,
     ):
@@ -96,6 +97,7 @@ class Agent:
         
         self.is_code_exec = is_code_exec
         self.code_exec_image = code_exec_image
+        self.code_exec_runtime = code_exec_runtime
         self._sandbox_tools: list[FuncTool] = []
 
         self.skills_path = skills_path
@@ -351,15 +353,6 @@ class Agent:
 
         return [c for c in res.content if isinstance(c, ToolCall)]
 
-        # tool_calls = [c for c in res.content if isinstance(c, ToolCall)]
-        # if tool_calls:
-        #     result = await self.act(ctx, tool_calls)
-        #     if result and result.status == "pending":
-        #         return result
-
-        # ctx.increment()
-        # return None
-
     def _tool_results_since(self, ctx: ExecContext, event_cnt: int) -> list[ToolResult]:
         
         results: list[ToolResult] = []
@@ -374,7 +367,7 @@ class Agent:
     async def think(self, req: Request) -> Response:
         return await self.client.call_llm(req)
     
-    async def act(self, ctx: ExecContext, tool_calls: list[ToolCall]) -> AgentResult | None:
+    async def act(self, ctx: ExecContext, tool_calls: list[ToolCall]) -> AgentResult | None:  # noqa: C901
         
         results: list[Message | ToolCall | ToolResult] = []
         pending = []
@@ -599,6 +592,22 @@ class Agent:
         return tools
     
     async def _setup_code_env(self, ctx: ExecContext):
+        runtime = self.code_exec_runtime.strip().lower()
+        if runtime not in {"microsandbox", "docker", "auto"}:
+            logger.warning("unsupported code execution runtime: %s", self.code_exec_runtime)
+            ctx.code_env = None
+            return
+
+        if runtime in {"microsandbox", "auto"}:
+            if await self._setup_microsandbox_code_env(ctx):
+                return
+
+            if runtime == "microsandbox":
+                return
+
+        await self._setup_docker_code_env(ctx)
+
+    async def _setup_microsandbox_code_env(self, ctx: ExecContext) -> bool:
 
         sandbox = None
         try:
@@ -617,19 +626,51 @@ class Agent:
             ctx.code_env = sandbox
 
             await upload_skills_to_sandbox(sandbox, self.skills_path)
+            return True
         
         except Exception:
             ctx.code_env = None
 
             if sandbox is None:
                 logger.warning("failed to set up code execution environment", exc_info=True)
-                return
+                return False
 
             result = sandbox.kill()
             if inspect.isawaitable(result):
                 await result
 
             logger.warning("failed to set up code execution environment", exc_info=True)
+            return False
+
+    async def _setup_docker_code_env(self, ctx: ExecContext) -> None:
+        sandbox = None
+        try:
+            from .docker_code_env import DockerCodeSandbox
+
+            name = f"agent-{ctx.exec_id}"
+            sandbox = await DockerCodeSandbox.create(
+                name,
+                image=self.code_exec_image,
+                replace=True,
+            )
+
+            await self._register_sandbox_tools(sandbox)
+            ctx.code_env = sandbox
+
+            await upload_skills_to_sandbox(sandbox, self.skills_path)
+
+        except Exception:
+            ctx.code_env = None
+
+            if sandbox is None:
+                logger.warning("failed to set up Docker code execution environment", exc_info=True)
+                return
+
+            result = sandbox.kill()
+            if inspect.isawaitable(result):
+                await result
+
+            logger.warning("failed to set up Docker code execution environment", exc_info=True)
     
     async def _register_sandbox_tools(self, sandbox) -> None:
 
@@ -723,6 +764,4 @@ class Agent:
                 logger.info(f"[{self.role}] {item.content}")
             elif isinstance(item, ToolCall):
                 logger.info(f"[{self.role}] Tool call: {item.name}({item.args})")
-
-
 
