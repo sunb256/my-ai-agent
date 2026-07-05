@@ -4,7 +4,8 @@
 // - my custom component
 // --------------------
 import { AgUiInterruptCard } from "@/components/AgUiInterruptCard";
-
+import { useEffect, useState } from "react";
+import { useAuiEvent, } from "@assistant-ui/react";
 // --------------------
 
 import {
@@ -230,7 +231,67 @@ const ThreadSuggestionItem: FC = () => {
   );
 };
 
+
+
+const ATTACHMENT_ERROR_TIMEOUT_MS = 5000;
+
+const formatAttachmentError = (message: string) => {
+  if (message.startsWith("File type") && message.includes("is not accepted")) {
+    return "対応している添付形式は画像/音声/動画、テキスト、PDF/Office、zipのみです。";
+  }
+
+  return message;
+};
+
+// const Composer: FC = () => {
+//   return (
+//     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
+//       <ComposerPrimitive.AttachmentDropzone asChild>
+//         <div
+//           data-slot="aui_composer-shell"
+//           className="border-border/60 data-[dragging=true]:border-ring focus-within:border-border dark:border-muted-foreground/15 dark:focus-within:border-muted-foreground/30 flex w-full flex-col gap-2 rounded-(--composer-radius) border bg-(--composer-bg) p-(--composer-padding) shadow-[0_4px_16px_-8px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color,box-shadow] focus-within:shadow-[0_6px_24px_-8px_rgba(0,0,0,0.12),0_1px_2px_rgba(0,0,0,0.05)] data-[dragging=true]:border-dashed data-[dragging=true]:bg-[color-mix(in_oklab,var(--color-accent)_50%,var(--color-background))] dark:shadow-none"
+//         >
+//           <ComposerAttachments />
+//           <ComposerPrimitive.Input
+//             placeholder="Send a message..."
+//             className="aui-composer-input placeholder:text-muted-foreground/80 max-h-32 min-h-10 w-full resize-none bg-transparent px-2.5 py-1 text-base outline-none"
+//             rows={1}
+//             autoFocus
+//             aria-label="Message input"
+//           />
+//           <ComposerAction />
+//         </div>
+//       </ComposerPrimitive.AttachmentDropzone>
+//     </ComposerPrimitive.Root>
+//   );
+// };
+
+
 const Composer: FC = () => {
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+
+  useAuiEvent("composer.attachmentAddError", ({ message }) => {
+    setAttachmentError(formatAttachmentError(message));
+  });
+
+  useAuiEvent("composer.attachmentAdd", () => {
+    setAttachmentError(null);
+  });
+
+  useAuiEvent("composer.send", () => {
+    setAttachmentError(null);
+  });
+
+  useEffect(() => {
+    if (!attachmentError) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setAttachmentError(null);
+    }, ATTACHMENT_ERROR_TIMEOUT_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [attachmentError]);
+
   return (
     <ComposerPrimitive.Root className="aui-composer-root relative flex w-full flex-col">
       <ComposerPrimitive.AttachmentDropzone asChild>
@@ -239,6 +300,16 @@ const Composer: FC = () => {
           className="border-border/60 data-[dragging=true]:border-ring focus-within:border-border dark:border-muted-foreground/15 dark:focus-within:border-muted-foreground/30 flex w-full flex-col gap-2 rounded-(--composer-radius) border bg-(--composer-bg) p-(--composer-padding) shadow-[0_4px_16px_-8px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color,box-shadow] focus-within:shadow-[0_6px_24px_-8px_rgba(0,0,0,0.12),0_1px_2px_rgba(0,0,0,0.05)] data-[dragging=true]:border-dashed data-[dragging=true]:bg-[color-mix(in_oklab,var(--color-accent)_50%,var(--color-background))] dark:shadow-none"
         >
           <ComposerAttachments />
+
+          {attachmentError ? (
+            <div
+              role="alert"
+              className="aui-composer-attachment-error text-destructive bg-destructive/10 mx-1 rounded-lg px-2.5 py-1.5 text-xs leading-5"
+            >
+              {attachmentError}
+            </div>
+          ) : null}
+
           <ComposerPrimitive.Input
             placeholder="Send a message..."
             className="aui-composer-input placeholder:text-muted-foreground/80 max-h-32 min-h-10 w-full resize-none bg-transparent px-2.5 py-1 text-base outline-none"
@@ -246,6 +317,7 @@ const Composer: FC = () => {
             autoFocus
             aria-label="Message input"
           />
+
           <ComposerAction />
         </div>
       </ComposerPrimitive.AttachmentDropzone>

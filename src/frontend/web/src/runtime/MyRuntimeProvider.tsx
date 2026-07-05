@@ -2,6 +2,7 @@ import { useMemo, type ReactNode } from "react";
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { useAgUiRuntime } from "@assistant-ui/react-ag-ui";
 import { HttpAgent } from "@ag-ui/client";
+import { uiOnlyAttachmentAdapter } from "@/runtime/attachmentAdapter";
 
 type Props = {
   children: ReactNode;
@@ -17,6 +18,9 @@ export function MyRuntimeProvider({ children }: Props) {
   const runtime = useAgUiRuntime({
     agent,
     showThinking: false,
+    adapters: {
+      attachments: uiOnlyAttachmentAdapter,
+    },
   });
 
   return (
