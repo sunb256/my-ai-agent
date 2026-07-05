@@ -1,4 +1,28 @@
 
+docker機能
+ - .env
+ - .env.prod
+ - infra/docker/
+ - src/agent/core/agent.py  setup_code_env周り
+ - src/agent/core/docker_code_env.py
+
+
+syntax highlight機能
+ - src/frontend/web/src/components/assistant-ui/tool-fallback.tsx
+ - src/frontend/web/src/components/assistant-ui/tool-group.tsx
+ - src/frontend/web/src/lib/monaco.ts
+
+
+file attach機能
+ - src/frontend/web/src/runtime/attachmentAdapter.tsx
+ - src/frontend/web/src/components/assistant-ui/thread.tsx
+ - src/frontend/web/src/runtime/MyRuntimeProvider.tsx
+ - src/frontend/web/src/components/assistant-ui/attachment.tsx
+       <Avatar className="aui-attachment-tile-avatar h-full w-full rounded-none after:border-border/20">
+        className="aui-attachment-tile bg-muted size-14 cursor-pointer overflow-hidden rounded-[calc(var(--composer-radius)-var(--composer-padding))] border border-border/40 transition-opacity hover:opacity-75"
+
+------------------------------------------
+
 
  - src/agent/core/model/context.py
  - src/agent/core/model/llm_message.py

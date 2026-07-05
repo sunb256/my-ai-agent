@@ -110,7 +110,7 @@ const AttachmentThumb: FC = () => {
   const src = useAttachmentSrc();
 
   return (
-    <Avatar className="aui-attachment-tile-avatar h-full w-full rounded-none">
+    <Avatar className="aui-attachment-tile-avatar h-full w-full rounded-none after:border-border/20">
       <AvatarImage
         src={src}
         alt="Attachment preview"
@@ -155,7 +155,7 @@ const AttachmentUI: FC = () => {
         <AttachmentPreviewDialog>
           <TooltipTrigger asChild>
             <div
-              className="aui-attachment-tile bg-muted size-14 cursor-pointer overflow-hidden rounded-[calc(var(--composer-radius)-var(--composer-padding))] border transition-opacity hover:opacity-75"
+              className="aui-attachment-tile bg-muted size-14 cursor-pointer overflow-hidden rounded-[calc(var(--composer-radius)-var(--composer-padding))] border border-border/40 transition-opacity hover:opacity-75"
               role="button"
               tabIndex={0}
               aria-label={`${typeLabel} attachment`}

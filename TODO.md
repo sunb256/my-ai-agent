@@ -12,17 +12,18 @@
   - docker
   - profile
   - skill
+  - 添付ファイル(frontend)
 
 未
-  - 添付ファイル
-  - 画像関係
-  - pdf, officeデータなどのデータ抽出、RAG
-  - 会話履歴
-  - グラフ表示
   - 設定(profile毎)
   - 設定コピー
   - 設定インポート
   - 設定エクスポート
+  - 添付ファイル(backend api/agent)
+  - 画像関係の表示(回答)
+  - pdf, officeデータなどのデータ抽出、RAG
+  - 会話履歴
+  - グラフ表示
   - 認証・認可
   - 音声入力(STT)
   - 音声出力(TTS)
