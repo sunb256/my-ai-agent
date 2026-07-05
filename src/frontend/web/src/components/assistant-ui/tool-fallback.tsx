@@ -25,7 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
-import Editor from "@monaco-editor/react";
+import { MonacoCodeViewer } from "@/components/assistant-ui/monaco-code-viewer";
 
 const ANIMATION_DURATION = 200;
 
@@ -230,7 +230,6 @@ function ToolFallbackContent({
 }
 
 
-type CodeLanguage = "json" | "plaintext" | "python";
 
 type ExecPythonArgsView = {
   code: string;
@@ -263,7 +262,7 @@ function parseJsonLike(value: unknown, depth = 0): unknown {
 const unwrapSingleValue = (value: unknown) => 
   Array.isArray(value) && value.length === 1 ? value[0]: value;
 
-function formatToolValue(value: unknown): { value: string, language: CodeLanguage } {
+function formatToolValue(value: unknown): { value: string, language: string } {
   const parsed = parseJsonLike(value);
 
   if (typeof parsed === "string") {
@@ -314,60 +313,6 @@ function normalizeExecPythonArgs(
   };
 }
 
-const CODE_VIEWER_LINE_HEIGHT = 17.1;
-const CODE_VIEWER_MIN_HEIGHT = 56;
-const CODE_VIEWER_MAX_HEIGHT = 560;
-
-function codeViewerHeight(value: string) {
-  const lines = value
-    .trimEnd()
-    .split("\n")
-    .reduce((sum, line) => {
-      return sum + Math.max(1, Math.ceil(line.length / 100));
-    }, 0);
-
-    return `${Math.min(
-              CODE_VIEWER_MAX_HEIGHT,
-              Math.max(
-                CODE_VIEWER_MIN_HEIGHT,
-                lines * CODE_VIEWER_LINE_HEIGHT,
-              ),)}px`;
-}
-
-function ToolCodeViewer({
-  value,
-  language,
-}: {
-  value: string;
-  language: CodeLanguage
-}) {
-  return (
-    <div className="overflow-hidden border bg-muted/50">
-      <Editor
-        height={codeViewerHeight(value)}
-        language={language}
-        value={value}
-        theme="vs-dark"
-        options={{
-          readOnly: true,
-          minimap: {enabled: false},
-          lineNumbers: "on",
-          wordWrap: "on",
-          scrollBeyondLastLine: false,
-          folding: false,
-          renderLineHighlight: "none",
-          automaticLayout: true,
-          lineHeight: CODE_VIEWER_LINE_HEIGHT,
-          padding: {
-            top: 7,
-            bottom: 7,
-          },
-        }}
-      />
-    </div>
-  )
-}
-
 function ToolFallbackArgs({
   argsText,
   toolName,
@@ -393,14 +338,14 @@ function ToolFallbackArgs({
           <p className="text-muted-foreground text-xs font-medium">
             Python code:
           </p>
-          <ToolCodeViewer value={execPythonArgs.code} language="python" />
+          <MonacoCodeViewer value={execPythonArgs.code} language="python" />
 
           {execPythonArgs.rest && (
             <>
               <p className="text-muted-foreground text-xs font-medium">
                 Other args:
               </p>
-              <ToolCodeViewer
+              <MonacoCodeViewer
                 value={JSON.stringify(execPythonArgs.rest, null, 2)}
                 language="json"
               />
@@ -408,7 +353,7 @@ function ToolFallbackArgs({
           )}
         </div>
       ) : (
-        <ToolCodeViewer value={formatted.value} language={formatted.language} />
+        <MonacoCodeViewer value={formatted.value} language={formatted.language} />
       )}
     </div>
   );
@@ -442,12 +387,12 @@ function ToolFallbackResult({
             ok: {String(execution.ok ?? execution.exitCode === 0)}
             {execution.exitCode !== undefined ? ` / exit_code: ${execution.exitCode}` : ""}
           </p>
-          {execution.stdout && <ToolCodeViewer value={execution.stdout} language="plaintext" />}
-          {execution.stderr && <ToolCodeViewer value={execution.stderr} language="plaintext" />}
+          {execution.stdout && <MonacoCodeViewer value={execution.stdout} language="plaintext" />}
+          {execution.stderr && <MonacoCodeViewer value={execution.stderr} language="plaintext" />}
         </div>
       ) : (
         <div className="mt-1">
-          <ToolCodeViewer value={formatted.value} language={formatted.language} />
+          <MonacoCodeViewer value={formatted.value} language={formatted.language} />
         </div>
       )}
     </div>
