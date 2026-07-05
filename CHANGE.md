@@ -1,16 +1,26 @@
 
+proxy
+ - src/frontend/web/vite.config.ts proxy周り
+
 docker機能
+ - uv add uvicorn[standard]>=0.49.0
  - .env
  - .env.prod
  - infra/docker/
  - src/agent/core/agent.py  setup_code_env周り
  - src/agent/core/docker_code_env.py
-
+ - .dockerignore
+ - src/agent/init.py
+ - src/agent/tests/test_init.py
+ - src/api/main.py env周り
+ - uv.lock
 
 syntax highlight機能
+npm i @monaco-editor/react  monaco-editor": "^0.55.1",
  - src/frontend/web/src/components/assistant-ui/tool-fallback.tsx
  - src/frontend/web/src/components/assistant-ui/tool-group.tsx
  - src/frontend/web/src/lib/monaco.ts
+ - src/frontend/web/src/components/assistant-ui/markdown-text.tsx
 
 
 file attach機能
