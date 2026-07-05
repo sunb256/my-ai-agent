@@ -4,10 +4,14 @@ import "@assistant-ui/react-markdown/styles/dot.css";
 
 import {
   type CodeHeaderProps,
+  type SyntaxHighlighterProps,
   MarkdownTextPrimitive,
   unstable_memoizeMarkdownComponents as memoizeMarkdownComponents,
-  useIsMarkdownCodeBlock,
+  useIsMarkdownCodeBlock, 
 } from "@assistant-ui/react-markdown";
+
+import { MonacoCodeViewer } from "@/components/assistant-ui/monaco-code-viewer";
+
 import remarkGfm from "remark-gfm";
 import { type FC, memo, useState } from "react";
 import { CheckIcon, CopyIcon } from "lucide-react";
@@ -28,6 +32,23 @@ const MarkdownTextImpl = () => {
 
 export const MarkdownText = memo(MarkdownTextImpl);
 
+const codeLanguageLabel = (language?: string) =>
+    !language || language === "unknown" ? "plaintext" : language;
+
+const MarkdownCodeBlock: FC<Omit<SyntaxHighlighterProps, "node">> = ({
+  code,
+  language,
+}) => {
+  return (
+    <MonacoCodeViewer
+      value={code}
+      language={language}
+      className="aui-md-monaco-code border-border/50 rounded-t-none rounded-b-xl border-t-0"
+    />
+  );
+};
+
+
 const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
   const { isCopied, copyToClipboard } = useCopyToClipboard();
   const onCopy = () => {
@@ -38,7 +59,7 @@ const CodeHeader: FC<CodeHeaderProps> = ({ language, code }) => {
   return (
     <div className="aui-code-header-root border-border/50 bg-muted/50 mt-3 flex items-center justify-between rounded-t-xl border border-b-0 px-3.5 py-1.5 text-xs">
       <span className="aui-code-header-language text-muted-foreground font-medium lowercase">
-        {language}
+        {codeLanguageLabel(language)}
       </span>
       <TooltipIconButton tooltip="Copy" onClick={onCopy}>
         {!isCopied && (
@@ -255,5 +276,6 @@ const defaultComponents = memoizeMarkdownComponents({
       />
     );
   },
+  SyntaxHighlighter: MarkdownCodeBlock,
   CodeHeader,
 });
