@@ -15,6 +15,8 @@
   - 添付ファイル(frontend)
 
 未
+  - 認証/認可
+  - Schedule Task
   - 設定(profile毎)
   - 設定コピー
   - 設定インポート
