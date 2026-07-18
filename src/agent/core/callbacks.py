@@ -24,16 +24,15 @@ def approval_cb(ctx: ExecContext, tool_call: ToolCall):
         print("❌ Denied. Skipping execution.\n")
         return f"User denied execution of {tool_call.name}"
 
-def search_compress(ctx: ExecContext, tool_result: ToolResult):
 
+def search_compress(ctx: ExecContext, tool_result: ToolResult):
     if tool_result.name != "search_web":
         return None
-    
-    org_content = tool_result.content[0]
 
-    if len(org_content) < 2000:
+    org_content = tool_result.content
+    if not isinstance(org_content, str) or len(org_content) < 2000:
         return None
-    
+
     query = _extract_search_query(ctx, tool_result.tool_call_id)
     if not query:
         return None
@@ -43,12 +42,12 @@ def search_compress(ctx: ExecContext, tool_result: ToolResult):
     results = vector_search(query, chunks, embd, top_k=3)
 
     compress = "\n\n".join([r['chunk'] for r in results])
-    
+
     return ToolResult(
         tool_call_id=tool_result.tool_call_id,
         name=tool_result.name,
         status=STR_SUCCESS,
-        content=[compress]
+        content=compress,
     )
 
 def _extract_search_query(ctx: ExecContext, tool_call_id: str) -> str:

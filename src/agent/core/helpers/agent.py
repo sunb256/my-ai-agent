@@ -41,17 +41,12 @@ def get_final_by_output_tool(event: Event, output_tool_name: str) -> Any:
     for item in event.content:
         if not isinstance(item, ToolResult):
             continue
-
         if item.name != output_tool_name:
             continue
-
         if item.status != STR_SUCCESS:
             continue
 
-        if not item.content:
-            continue
-
-        return item.content[0]
+        return item.content
 
     return None
 

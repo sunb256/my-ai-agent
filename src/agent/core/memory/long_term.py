@@ -89,7 +89,7 @@ class TaskMemoryManager:
                 elif isinstance(item, ToolCall):
                     lines.append(f"[Tool Call]: {item.name}({item.args})")
                 elif isinstance(item, ToolResult):
-                    preview = str(item.content[0])[:500] if item.content else ""
+                    preview = str(item.content)[:500] if item.content is not None else ""
                     lines.append(f"[Tool Result]: {item.name} -> {preview}")
         return "\n".join(lines)
     

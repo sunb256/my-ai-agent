@@ -63,8 +63,21 @@ class MessageHelper:
         for item in req.contents:
             if isinstance(item, Message):
                 msgs.append(MessageHelper.message(item))
+
             elif isinstance(item, ToolCall):
-                msgs.append(MessageHelper.tool_call(item))
+                tool_call = MessageHelper.tool_call_item(item)
+
+                if msgs and msgs[-1]["role"] == "assistant":
+                    msgs[-1].setdefault("tool_calls", []).append(tool_call)
+                else:
+                    msgs.append(
+                        {
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": [tool_call],
+                        }
+                    )
+
             elif isinstance(item, ToolResult):
                 msgs.append(MessageHelper.tool_result(item))
 
@@ -75,6 +88,17 @@ class MessageHelper:
         return {
             "role": item.role,
             "content": item.content,
+        }
+
+    @staticmethod
+    def tool_call_item(item: ToolCall) -> dict[str, Any]:
+        return {
+            "id": item.tool_call_id,
+            "type": "function",
+            "function": {
+                "name": item.name,
+                "arguments": json.dumps(item.args, ensure_ascii=False),
+            },
         }
 
     @staticmethod
@@ -98,9 +122,19 @@ class MessageHelper:
     def tool_result(item: ToolResult) -> dict[str, Any]:
         return {
             "role": "tool",
-            "content": str(item.content[0]) if item.content else "",
+            "content": MessageHelper.serialize_tool_result(item.content),
             "tool_call_id": item.tool_call_id,
         }
+
+    @staticmethod
+    def serialize_tool_result(content: Any) -> str:
+        if content is None:
+            return ""
+
+        if isinstance(content, str):
+            return content
+
+        return json.dumps(content, ensure_ascii=False, default=str)
 
 class Client:
 
