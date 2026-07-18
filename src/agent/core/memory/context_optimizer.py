@@ -160,7 +160,7 @@ def _compact_tool_result(item: ToolResult, tool_call_args: dict[str, dict]) -> T
         tool_call_id=item.tool_call_id,
         name=item.name,
         status=item.status,
-        content=[content],
+        content=content,
     )
 
 
@@ -206,7 +206,7 @@ def format_history(items: list[ContentItem]) -> str:
         elif isinstance(item, ToolCall):
             lines.append(f"[Tool Call]: {item.name}({item.args})")
         elif isinstance(item, ToolResult):
-            preview = str(item.content[0])[:200] if item.content else ""
+            preview = str(item.content)[:200] if item.content is not None else ""
             lines.append(f"[Tool Result]: {item.name} -> {preview}...")
     return "\n".join(lines)
 

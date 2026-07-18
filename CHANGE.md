@@ -1,3 +1,18 @@
+ - ToolCall, ToolResultの複数対応
+    src/agent/core/model/types.py ToolResult
+    src/agent/core/llm_client.py MessageHelper
+    src/agent/core/helpers/agent.py
+    src/agent/core/agent.py _tool_rets_output
+    src/agent/core/callbacks.py search_compress
+    src/agent/core/memory/long_term.py _format_execution_history
+    src/agent/core/memory/context_optimizer.py 
+      format_history
+      _compact_tool_result
+    src/agent/core/helpers/const.py
+    src/agent/core/model/llm_message.py get_system_prompt_msgs
+
+
+--------------------------------------
 
 proxy
  - src/frontend/web/vite.config.ts proxy周り

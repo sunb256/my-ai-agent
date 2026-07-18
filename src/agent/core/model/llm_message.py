@@ -18,7 +18,7 @@ class Request(BaseModel):
     def append_prompt(self, text: str) -> None:
         self.system_prompt.append(text)
 
-    def get_system_prompt_msgs(self) -> list[str]:
+    def get_system_prompt_msgs(self) -> list[dict[str, str]]:
          return [{"role": "system", "content": prompt} for prompt in self.system_prompt]
 
 class Response(BaseModel):

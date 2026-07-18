@@ -10,7 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from agent.core.model.llm_message import Request  # noqa: E402
-from agent.core.llm_client import Client  # noqa: E402
+from agent.core.llm_client import Client, MessageHelper  # noqa: E402
 from agent.core.model.types import Message, ToolCall, ToolResult  # noqa: E402
 
 
@@ -43,7 +43,7 @@ def test_generate_builds_litellm_messages(monkeypatch: pytest.MonkeyPatch) -> No
                 tool_call_id="call-1",
                 name="add_numbers",
                 status="success",
-                content=[8],
+                content=8,
             ),
         ],
     )
@@ -72,5 +72,73 @@ def test_generate_builds_litellm_messages(monkeypatch: pytest.MonkeyPatch) -> No
             "role": "tool",
             "content": "8",
             "tool_call_id": "call-1",
+        },
+    ]
+
+
+def test_build_msgs_groups_multiple_tool_calls_in_one_assistant_message() -> None:
+    request = Request(
+        contents=[
+            Message(role="user", content="Check Tokyo and Osaka weather."),
+            ToolCall(
+                tool_call_id="call-tokyo",
+                name="get_weather",
+                args={"city": "Tokyo"},
+            ),
+            ToolCall(
+                tool_call_id="call-osaka",
+                name="get_weather",
+                args={"city": "Osaka"},
+            ),
+            ToolResult(
+                tool_call_id="call-tokyo",
+                name="get_weather",
+                status="success",
+                content={"weather": "sunny"},
+            ),
+            ToolResult(
+                tool_call_id="call-osaka",
+                name="get_weather",
+                status="success",
+                content={"weather": "cloudy"},
+            ),
+        ],
+    )
+
+    messages = MessageHelper.build_msgs(request)
+
+    assert messages == [
+        {"role": "user", "content": "Check Tokyo and Osaka weather."},
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": "call-tokyo",
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "arguments": '{"city": "Tokyo"}',
+                    },
+                },
+                {
+                    "id": "call-osaka",
+                    "type": "function",
+                    "function": {
+                        "name": "get_weather",
+                        "arguments": '{"city": "Osaka"}',
+                    },
+                },
+            ],
+        },
+        {
+            "role": "tool",
+            "content": '{"weather": "sunny"}',
+            "tool_call_id": "call-tokyo",
+        },
+        {
+            "role": "tool",
+            "content": '{"weather": "cloudy"}',
+            "tool_call_id": "call-osaka",
         },
     ]

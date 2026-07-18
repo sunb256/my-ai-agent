@@ -525,20 +525,18 @@ class Agent:
             return get_final_by_plain_message(event)
     
     def _tool_rets_output(self, results: list[ToolResult]) -> str:
-
         lines: list[str] = []
 
         for result in results:
-            content = result.content[0] if result.content else ""
-
-            if content:
-                lines.append(str(content))
+            if result.content is not None:
+                lines.append(str(result.content))
             elif result.status == STR_SUCCESS:
                 lines.append(f"{result.name} completed.")
             else:
                 lines.append(f"{result.name} failed.")
 
         return "\n".join(lines)
+
 
     def _setup_tools(self, tools: list[BaseTool]) -> list[BaseTool]:
         tools = list(tools)

@@ -49,3 +49,13 @@ uv run my-ai-agent "./src/agent/tests/samples/pop_area_2009.xlsx upload_file で
 ```bash
 uv run my-ai-agent "./src/agent/tests/samples/pop_area_2009.xlsx を upload_file でアップロードして、data-file-analysis skills を使い、シート構造を確認してから人口密度が高い国TOP10をJSONだけで答えて"
 ```
+
+
+## 複数ToolCall
+
+```bash
+次の2つは互いに独立した処理です。推測や暗算はせず、両方のツールを同じターンで呼び出してから、結果をまとめて回答してください。
+
+  1. add_numbers を使って 123 + 456 を計算する
+  2. get_current_time を使って現在時刻を取得する
+```
