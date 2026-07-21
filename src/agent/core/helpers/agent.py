@@ -21,21 +21,32 @@ def is_final_by_output_tool(event: Event, output_tool_name: str) -> bool:
     return False
 
 
+# def is_final_by_plain_message(event: Event) -> bool:
+#     """
+#     output_tool_name が指定されていない場合:
+#     tool call / tool result を含まない通常メッセージなら final response とみなす。
+#     """
+
+#     for item in event.content:
+#         if isinstance(item, ToolCall):
+#             return False
+
+#         if isinstance(item, ToolResult):
+#             return False
+
+#     return True
+
 def is_final_by_plain_message(event: Event) -> bool:
-    """
-    output_tool_name が指定されていない場合:
-    tool call / tool result を含まない通常メッセージなら final response とみなす。
-    """
+      has_assistant_msg = False
 
-    for item in event.content:
-        if isinstance(item, ToolCall):
-            return False
+      for item in event.content:
+          if isinstance(item, (ToolCall, ToolResult)):
+              return False
 
-        if isinstance(item, ToolResult):
-            return False
+          if isinstance(item, Message) and item.role == ASSISTANT:
+              has_assistant_msg = True
 
-    return True
-
+      return has_assistant_msg
 
 def get_final_by_output_tool(event: Event, output_tool_name: str) -> Any:
     for item in event.content:

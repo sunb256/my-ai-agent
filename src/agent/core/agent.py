@@ -188,6 +188,7 @@ class Agent:
             ctx.memory_manager = self.memory_manager
 
         # hitl
+        conf_rets: list[ToolResult] = []
         if confirm:
             conf_rets = await self._process_confirm(ctx, confirm)
 
@@ -255,7 +256,10 @@ class Agent:
 
         finally:
             if ctx.code_env is not None:
-                result = ctx.code_env.kill()
+                code_env = ctx.code_env
+                ctx.code_env = None
+
+                result = code_env.kill()
                 if inspect.isawaitable(result):
                     await result
     
@@ -343,7 +347,7 @@ class Agent:
     async def _apply_llm_response(self, ctx: ExecContext, res: Response, verbose: bool) -> list[ToolCall]:
 
         if res.err_msg:
-            raise RuntimeError(res.err_msg)
+            raise RuntimeError(f"[{self.role}] {res.err_msg}")
 
         if verbose:
             self._log_response(res)
@@ -568,7 +572,7 @@ class Agent:
                 func=_parse_output,
                 name="final_answer",
                 desc="Return the final structured answer matching the required schema.",
-                tool_def =tool_def
+                tool_def=tool_def
             )
             
             tools.append(final_answer_tool)

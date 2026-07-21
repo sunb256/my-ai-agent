@@ -1,7 +1,9 @@
 import inspect
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any, Callable, Optional, Type
+from pydantic import BaseModel
 
+from agent.core.agent import Agent
 from agent.core.helpers.schema import func_input_schema, format_tool_def
 from agent.core.model.context import ExecContext
 
@@ -129,7 +131,59 @@ class FuncTool(BaseTool):
             
             filtered_lines.append(line)
         return "\n".join(filtered_lines)
+
+
+class AgentTool(BaseTool):
+
+    def __init__(self, 
+                 agent: Agent, 
+                 input_schema: Optional[Type[BaseModel]] = None,
+                 need_confirm: bool = False,
+                 confirm_msg_tmpl: str = "",
+                 ):
+
+        self.agent = agent
+        self.input_schema = input_schema
+
     
+        if input_schema:
+            params = input_schema.model_json_schema()
+            params.pop("$defs", None)
+            params.pop("title", None)
+        else:
+            params = {
+                "type": "object",
+                "properties": {
+                    "request": {
+                        "type": "string",
+                        "description": "The task or question to delegate"
+                    }
+                },
+                "required": ["request"]
+            }
+        
+        tool_def = format_tool_def(agent.name, agent.desc, params)
+
+        super().__init__(
+            name = agent.name,
+            desc = agent.desc,
+            tool_def = tool_def,
+            need_confirm = need_confirm,
+            confirm_msg_tmpl = confirm_msg_tmpl
+        )
+
+    async def execute(self, ctx: ExecContext, **kwargs) -> Any:
+        if self.input_schema:
+            validated = self.input_schema.model_validate(kwargs)
+            req = validated.model_dump_json(exclude_none=True)
+        else:
+            req = kwargs.get("request", str(kwargs))
+        
+        result = await self.agent.ru(req)
+
+        return result.output
+
+
 def tool(func=None, *, 
          name=None, desc=None, sandbox_exec=False, need_confirm: bool = False, confirm_msg_tmpl: str | None = None):
     
