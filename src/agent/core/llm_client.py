@@ -277,14 +277,38 @@ class Client:
 
         choice = res.choices[0]
         contents = self._parse_content(choice.message)
+        
+        metadata = {
+            "input_tokens": res.usage.prompt_tokens,
+            "output_tokens": res.usage.completion_tokens,
+        }
 
+        if not contents:
+            finish_reason = getattr(choice, "finish_reason", None)
+
+            return Response(
+                err_msg=(
+                    "LLM returned no message content or tool calls "
+                    f"(finish_reason={finish_reason!r})"
+                ),
+                metadata={
+                    "input_tokens": res.usage.prompt_tokens,
+                    "output_tokens": res.usage.completion_tokens,
+                },
+            )
+        
         return Response(
             content=contents,
-            metadata={
-                "input_tokens": res.usage.prompt_tokens,
-                "output_tokens": res.usage.completion_tokens,
-            },
+            metadata=metadata,
         )
+    
+        # return Response(
+        #     content=contents,
+        #     metadata={
+        #         "input_tokens": res.usage.prompt_tokens,
+        #         "output_tokens": res.usage.completion_tokens,
+        #     },
+        # )
 
     def _parse_content(self, message: Any) -> list[Message | ToolCall | ToolResult]:
 

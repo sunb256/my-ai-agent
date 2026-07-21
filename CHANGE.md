@@ -11,6 +11,18 @@
     src/agent/core/helpers/const.py
     src/agent/core/model/llm_message.py get_system_prompt_msgs
 
+ - AgentTool
+        modified:   src/agent/core/agent.py
+        modified:   src/agent/core/helpers/agent.py
+        modified:   src/agent/core/llm_client.py
+        modified:   src/agent/core/model/tool_base.py
+
+      Untracked files:
+        docs/archtiecture/vllm.md
+        docs/reports/
+        src/agent/core/tools/agent_tool.py
+        src/agent/core/workflow/
+        src/agent/workflow.py
 
 --------------------------------------
 

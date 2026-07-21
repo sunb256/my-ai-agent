@@ -1,0 +1,74 @@
+name: ${COMPOSE_PROJECT_NAME:-vllm-monitoring}
+
+services:
+  vllm:
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.25.0}
+    container_name: ${VLLM_CONTAINER_NAME:-vllm}
+    restart: unless-stopped
+    ipc: host
+    shm_size: ${VLLM_SHM_SIZE:-16gb}
+    gpus: all
+    env_file:
+      - .env
+    environment:
+      HF_HOME: /root/.cache/huggingface
+    entrypoint:
+      - /bin/bash
+      - /opt/vllm/start-vllm.sh
+    volumes:
+      - ${HF_CACHE_DIR:-./data/huggingface}:/root/.cache/huggingface
+      - ./scripts/start-vllm.sh:/opt/vllm/start-vllm.sh:ro
+    ports:
+      - "${VLLM_BIND_ADDRESS:-127.0.0.1}:${VLLM_HOST_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"
+      interval: ${VLLM_HEALTH_INTERVAL:-15s}
+      timeout: ${VLLM_HEALTH_TIMEOUT:-10s}
+      retries: ${VLLM_HEALTH_RETRIES:-10}
+      start_period: ${VLLM_HEALTH_START_PERIOD:-10m}
+    stop_grace_period: 2m
+    logging:
+      driver: json-file
+      options:
+        max-size: ${VLLM_LOG_MAX_SIZE:-50m}
+        max-file: "${VLLM_LOG_MAX_FILES:-3}"
+    networks:
+      - llm-monitoring
+
+  prometheus:
+    image: prom/prometheus:v3.13.1
+    container_name: ${PROMETHEUS_CONTAINER_NAME:-prometheus}
+    ports:
+      - "${PROMETHEUS_BIND_ADDRESS:-127.0.0.1}:${PROMETHEUS_HOST_PORT:-9090}:9090"
+    logging:
+      driver: json-file
+      options:
+        max-size: ${PROMETHEUS_LOG_MAX_SIZE:-20m}
+        max-file: "${PROMETHEUS_LOG_MAX_FILES:-3}"
+    depends_on:
+      vllm:
+        condition: service_started
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-15d}
+      - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-10GB}
+      - --web.enable-lifecycle
+      - --web.listen-address=0.0.0.0:9090
+    restart: unless-stopped
+    networks:
+      - llm-monitoring
+
+volumes:
+  prometheus-data:
+
+networks:
+  llm-monitoring:
+    driver: bridge

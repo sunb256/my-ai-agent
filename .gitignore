@@ -27,3 +27,7 @@ adk-python/
 .pytest_cache/
 .ruff_cache/
 .uv_cache/
+
+
+logs/*
+!logs/.gitkeep
